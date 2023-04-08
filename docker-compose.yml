@@ -1,0 +1,36 @@
+version: "3"
+services:
+  api: # サービス名
+    build: # ビルドに使うDockerファイルのパス
+      context: .
+    tty: true # コンテナの永続化
+    environment:
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_TEST_DATABASE: ${MYSQL_TEST_DATABASE}
+      MYSQL_HOST: "db"
+      MYSQL_PORT: ${MYSQL_PORT}
+    ports:
+      - 5500:5500
+    volumes:
+      - ./:/go/src/app # マウントディレクトリ
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8.0.28
+    ports:
+      - "3306:3306"
+    # 記載はしているが基本的に下記は使う予定はない
+    volumes:
+      #mysql.cnfを反映させるためのディレクトリ
+      - ./mysql/conf.d:/etc/mysql/conf.d
+        #DBの実体を残したい場合にはコメントアウトを外す
+      # - ./mysql/data:/var/lib/mysql
+      #MySQL初回起動時に実行するsqlやsh等を渡すためのディレクトリ
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_HOST: "%"
