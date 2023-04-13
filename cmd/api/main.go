@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -64,30 +65,41 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				rooms[roomId].clients[ws] = true
 			case "offer":
 				log.Printf("offerを送ったよ")
-				sendMessageToOtherClients(ws, roomId, msg)
+				newClient := &client{conn: ws, mu: sync.Mutex{}, roomID: roomId}
+				sendMessageToOtherClients(newClient, msg)
 			case "answer":
-				sendMessageToOtherClients(ws, roomId, msg)
+				newClient := &client{conn: ws, mu: sync.Mutex{}, roomID: roomId}
+				sendMessageToOtherClients(newClient, msg)
 				log.Printf("answerを送ったよ")
 			case "candidate":
 				log.Printf("candidateを送ったよ")
-				sendMessageToOtherClients(ws, roomId, msg)
+				newClient := &client{conn: ws, mu: sync.Mutex{}, roomID: roomId}
+
+				sendMessageToOtherClients(newClient, msg)
 			}
 		}
 	}
 
 }
-func sendMessageToOtherClients(ws *websocket.Conn, roomId string, msg map[string]interface{}) {
-	room, ok := rooms[roomId]
-	if !ok {
-		log.Printf("Room not found: %s", roomId)
-		return
-	}
 
-	for client := range room.clients {
-		if client != ws {
-			err := client.WriteJSON(msg)
+type client struct {
+	conn   *websocket.Conn
+	mu     sync.Mutex
+	roomID string
+}
+
+var clients = make(map[*client]struct{})
+
+func sendMessageToOtherClients(senderClient *client, message interface{}) {
+	for client := range clients {
+		if client != senderClient {
+			client.mu.Lock()
+			err := client.conn.WriteJSON(message)
+			client.mu.Unlock()
 			if err != nil {
-				log.Printf("Error sending message to client: %v", err)
+				log.Printf("Error sending message: %v", err)
+				client.conn.Close()
+				delete(clients, client)
 			}
 		}
 	}
