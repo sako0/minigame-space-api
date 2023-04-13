@@ -76,10 +76,19 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
-func sendMessageToOtherClients(ws *websocket.Conn, roomID string, msg map[string]interface{}) {
-	for client := range rooms[roomID].clients {
+func sendMessageToOtherClients(ws *websocket.Conn, roomId string, msg map[string]interface{}) {
+	room, ok := rooms[roomId]
+	if !ok {
+		log.Printf("Room not found: %s", roomId)
+		return
+	}
+
+	for client := range room.clients {
 		if client != ws {
-			client.WriteJSON(msg)
+			err := client.WriteJSON(msg)
+			if err != nil {
+				log.Printf("Error sending message to client: %v", err)
+			}
 		}
 	}
 }
