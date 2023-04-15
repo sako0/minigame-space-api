@@ -24,6 +24,8 @@ services:
   api: # サービス名
     build: # ビルドに使うDockerファイルのパス
       context: .
+      args:
+        BUILD_NO_VCS: "true"
     tty: true # コンテナの永続化
     environment:
       MYSQL_USER: ${MYSQL_USER}
