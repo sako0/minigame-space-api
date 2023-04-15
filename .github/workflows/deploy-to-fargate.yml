@@ -2,9 +2,9 @@ name: Deploy to AWS Fargate
 
 on:
   push:
-  workflow_dispatch:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy:
