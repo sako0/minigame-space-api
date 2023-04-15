@@ -1,4 +1,4 @@
-FROM golang:1.20 AS builder
+FROM golang:1.20.3-alpine
 
 # ログに出力する時間をJSTにするため、タイムゾーンを設定
 ENV TZ /usr/share/zoneinfo/Asia/Tokyo
