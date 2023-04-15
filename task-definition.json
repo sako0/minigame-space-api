@@ -7,9 +7,9 @@
         {
             "name": "api",
             "image": "282706015608.dkr.ecr.ap-northeast-1.amazonaws.com/webrtc-voice:latest",
-            "cpu": 512,
-            "memory": 1024,
-            "memoryReservation": 512,
+            "cpu": 1024,
+            "memory": 2048,
+            "memoryReservation": 256,
             "essential": true,
             "portMappings": [
                 {
@@ -36,6 +36,6 @@
         "cpuArchitecture": "X86_64",
         "operatingSystemFamily": "LINUX"
     },
-    "cpu": "512",
-    "memory": "1025"
+    "cpu": "1024",
+    "memory": "2048"
 }
