@@ -16,7 +16,8 @@ services:
     volumes:
       - ./:/go/src/app # マウントディレクトリ
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   db:
     image: mysql:8.0.28
