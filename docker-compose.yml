@@ -32,4 +32,5 @@ services:
     volumes:
       - ./:/go/src/app # マウントディレクトリ
     depends_on:
-      - db
+      db:
+        condition: service_healthy # dbコンテナが起動してからapiコンテナを起動する
