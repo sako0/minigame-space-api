@@ -37,7 +37,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: task-definition.json
-          service: mini-game-space-service-2
+          service: mini-game-space-service-3
           cluster: mini-game-space-cluster
           container: api
           image: ${{ steps.login-ecr.outputs.registry }}/webrtc-voice:latest
