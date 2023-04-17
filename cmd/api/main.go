@@ -43,6 +43,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
+	var clientId string
+
 	for {
 		var msg = map[string]interface{}{}
 
@@ -53,7 +55,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 		roomId, ok := msg["roomId"].(string)
 		if !ok {
-			log.Printf("roomIdがないよ")
+			log.Printf("roomIdがない")
 			return
 		}
 		if _, ok := rooms[roomId]; !ok {
@@ -64,19 +66,34 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Received message: %v", msg)
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
+			case "set-client-id":
+				log.Println("=============================")
+				log.Println("clientIdをセットした")
+				log.Println("=============================")
+                clientId = msg["clientId"].(string)
 			case "join":
-				log.Printf("参加したよ")
+				log.Println("=============================")
+				log.Println("参加した")
+				log.Println("=============================")
 				// roomに参加する
 				rooms[roomId].clients[ws] = true
+				msg["sender"] = clientId
+				sendMessageToOtherClients(ws, roomId, msg)
 			case "offer":
-				log.Printf("offerを送ったよ")
+				log.Println("=============================")
+				log.Println("offerを送った")
+				log.Println("=============================")
+				msg["sender"] = clientId
 				sendMessageToOtherClients(ws, roomId, msg)
 			case "answer":
+				msg["sender"] = clientId
 				sendMessageToOtherClients(ws, roomId, msg)
-				log.Printf("answerを送ったよ")
+				log.Println("=============================")
+				log.Println("answerを送った")
+				log.Println("=============================")
 			case "candidate":
-				log.Printf("candidateを送ったよ")
 				log.Printf("Received ICE candidate: %v", msg["candidate"])
+				msg["sender"] = clientId
 				sendMessageToOtherClients(ws, roomId, msg)
 			}
 		}
@@ -95,6 +112,7 @@ func sendMessageToOtherClients(ws *websocket.Conn, roomId string, msg map[string
 			err := client.WriteJSON(msg)
 			if err != nil {
 				log.Printf("Error sending message to client: %v", err)
+				delete(room.clients, client)
 			}
 		}
 	}
