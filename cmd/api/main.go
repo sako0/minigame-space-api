@@ -27,6 +27,10 @@ type Room struct {
 
 func main() {
 	http.HandleFunc("/socket.io/", handleConnections)
+	// helth check
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
 
 	log.Println("Starting server on :5500")
 	err := http.ListenAndServe(":5500", nil)
