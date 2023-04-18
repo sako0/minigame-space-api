@@ -15,17 +15,18 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type Client struct {
+	conn     *websocket.Conn
+	roomId   string
+	clientId string
+}
+
 type Room struct {
-	clients map[*websocket.Conn]bool
+	clients map[*Client]bool
 }
 
 func main() {
 	http.HandleFunc("/socket.io/", handleConnections)
-
-	// health check
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
 
 	log.Println("Starting server on :5500")
 	err := http.ListenAndServe(":5500", nil)
@@ -37,83 +38,96 @@ func main() {
 var rooms = make(map[string]*Room)
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer ws.Close()
+	defer conn.Close()
 
-	var clientId string
+	client := &Client{conn: conn}
 
 	for {
 		var msg = map[string]interface{}{}
 
-		err := ws.ReadJSON(&msg)
+		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
 			break
 		}
+
 		roomId, ok := msg["roomId"].(string)
 		if !ok {
-			log.Printf("roomIdがない")
+			log.Printf("roomId is missing")
 			return
 		}
-		if _, ok := rooms[roomId]; !ok {
-			rooms[roomId] = &Room{clients: make(map[*websocket.Conn]bool)}
+		clientId, ok := msg["userId"].(string)
+		if !ok {
+			log.Printf("userId is missing")
+			return
 		}
-		rooms[roomId].clients[ws] = true
+		client.roomId = roomId
+		client.clientId = clientId
+
+		if _, ok := rooms[roomId]; !ok {
+			rooms[roomId] = &Room{clients: make(map[*Client]bool)}
+		}
+		rooms[roomId].clients[client] = true
 
 		log.Printf("Received message: %v", msg)
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
-			case "set-client-id":
-				log.Println("=============================")
-				log.Println("clientIdをセットした")
-				log.Println("=============================")
-                clientId = msg["clientId"].(string)
-			case "join":
-				log.Println("=============================")
-				log.Println("参加した")
-				log.Println("=============================")
-				// roomに参加する
-				rooms[roomId].clients[ws] = true
-				msg["sender"] = clientId
-				sendMessageToOtherClients(ws, roomId, msg)
-			case "offer":
-				log.Println("=============================")
-				log.Println("offerを送った")
-				log.Println("=============================")
-				msg["sender"] = clientId
-				sendMessageToOtherClients(ws, roomId, msg)
-			case "answer":
-				msg["sender"] = clientId
-				sendMessageToOtherClients(ws, roomId, msg)
-				log.Println("=============================")
-				log.Println("answerを送った")
-				log.Println("=============================")
-			case "candidate":
-				log.Printf("Received ICE candidate: %v", msg["candidate"])
-				msg["sender"] = clientId
-				sendMessageToOtherClients(ws, roomId, msg)
+			case "join-room":
+				sendRoomJoinedEvent(client)
+			case "offer", "answer", "ice-candidate":
+				msg["clientId"] = clientId
+				sendMessageToOtherClients(client, msg)
 			}
 		}
 	}
-
 }
-func sendMessageToOtherClients(ws *websocket.Conn, roomId string, msg map[string]interface{}) {
-	room, ok := rooms[roomId]
+
+func sendMessageToOtherClients(client *Client, msg map[string]interface{}) {
+	room, ok := rooms[client.roomId]
 	if !ok {
-		log.Printf("Room not found: %s", roomId)
+		log.Printf("Room not found: %s", client.roomId)
 		return
 	}
 
-	for client := range room.clients {
-		if client != ws {
-			err := client.WriteJSON(msg)
+	for otherClient := range room.clients {
+		if otherClient != client {
+			err := otherClient.conn.WriteJSON(msg)
 			if err != nil {
 				log.Printf("Error sending message to client: %v", err)
-				delete(room.clients, client)
+				delete(room.clients, otherClient)
 			}
 		}
+	}
+}
+
+func sendRoomJoinedEvent(client *Client) {
+	connectedUserIds := []string{}
+
+	room, ok := rooms[client.roomId]
+	if !ok {
+		log.Printf("Room not found: %s", client.roomId)
+		return
+	}
+
+	for otherClient := range room.clients {
+		if otherClient != client {
+			connectedUserIds = append(connectedUserIds, otherClient.clientId)
+		}
+	}
+
+	roomJoinedMsg := map[string]interface{}{
+		"type":             "client-joined",
+		"connectedUserIds": connectedUserIds,
+		"clientId":         client.clientId,
+	}
+
+	err := client.conn.WriteJSON(roomJoinedMsg)
+	if err != nil {
+		log.Printf("Error sending client-joined event to client: %v", err)
+		delete(room.clients, client)
 	}
 }
