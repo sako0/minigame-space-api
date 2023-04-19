@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,9 +17,9 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	conn     *websocket.Conn
-	roomId   string
-	clientId string
+	conn   *websocket.Conn
+	roomId string
+	userId string
 }
 
 type Room struct {
@@ -56,6 +57,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
+			room, ok := rooms[client.roomId]
+			if ok {
+				delete(room.clients, client)
+				if len(room.clients) == 0 {
+					delete(rooms, client.roomId)
+				}
+			}
 			break
 		}
 
@@ -64,13 +72,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			log.Printf("roomId is missing")
 			return
 		}
-		clientId, ok := msg["userId"].(string)
+		userId, ok := msg["userId"].(string)
 		if !ok {
 			log.Printf("userId is missing")
 			return
 		}
 		client.roomId = roomId
-		client.clientId = clientId
+		client.userId = userId
 
 		if _, ok := rooms[roomId]; !ok {
 			rooms[roomId] = &Room{clients: make(map[*Client]bool)}
@@ -83,14 +91,18 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			case "join-room":
 				sendRoomJoinedEvent(client)
 			case "offer", "answer", "ice-candidate":
-				msg["clientId"] = clientId
-				sendMessageToOtherClients(client, msg)
+				toUserId, ok := msg["toUserId"].(string)
+				if !ok {
+					log.Printf("toUserId is missing")
+					return
+				}
+				msg["userId"] = userId
+				sendMessageToOtherClients(client, toUserId, msg)
 			}
 		}
 	}
 }
-
-func sendMessageToOtherClients(client *Client, msg map[string]interface{}) {
+func sendMessageToOtherClients(client *Client, toUserId string, msg map[string]interface{}) {
 	room, ok := rooms[client.roomId]
 	if !ok {
 		log.Printf("Room not found: %s", client.roomId)
@@ -98,7 +110,7 @@ func sendMessageToOtherClients(client *Client, msg map[string]interface{}) {
 	}
 
 	for otherClient := range room.clients {
-		if otherClient != client {
+		if otherClient.userId == toUserId {
 			err := otherClient.conn.WriteJSON(msg)
 			if err != nil {
 				log.Printf("Error sending message to client: %v", err)
@@ -110,7 +122,7 @@ func sendMessageToOtherClients(client *Client, msg map[string]interface{}) {
 
 func sendRoomJoinedEvent(client *Client) {
 	connectedUserIds := []string{}
-
+	time.Sleep(1 * time.Second)
 	room, ok := rooms[client.roomId]
 	if !ok {
 		log.Printf("Room not found: %s", client.roomId)
@@ -119,14 +131,14 @@ func sendRoomJoinedEvent(client *Client) {
 
 	for otherClient := range room.clients {
 		if otherClient != client {
-			connectedUserIds = append(connectedUserIds, otherClient.clientId)
+			connectedUserIds = append(connectedUserIds, otherClient.userId)
 		}
 	}
-
+	log.Printf("Connected user IDs: %v", connectedUserIds)
 	roomJoinedMsg := map[string]interface{}{
 		"type":             "client-joined",
 		"connectedUserIds": connectedUserIds,
-		"clientId":         client.clientId,
+		"userId":           client.userId,
 	}
 
 	err := client.conn.WriteJSON(roomJoinedMsg)
