@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/sako0/minigame-space-api/app/infra"
 	"github.com/sako0/minigame-space-api/app/usecase"
 	handler "github.com/sako0/minigame-space-api/app/websocket"
@@ -21,15 +22,21 @@ func main() {
 
 	roomRepo := infra.NewInMemoryRoomRepository()
 	roomUsecase := usecase.NewRoomUsecase(roomRepo)
-	handler := handler.NewWebSocketHandler(*roomUsecase, upgrader)
+	wsHandler := handler.NewWebSocketHandler(*roomUsecase, upgrader)
 
-	http.HandleFunc("/socket.io/", handler.HandleConnections)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+	e := echo.New()
+
+	e.GET("/signaling", func(c echo.Context) error {
+		wsHandler.HandleConnections(c.Response().Writer, c.Request())
+		return nil
+	})
+
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
 	})
 
 	log.Println("Starting server on :5500")
-	err := http.ListenAndServe(":5500", nil)
+	err := e.Start(":5500")
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
