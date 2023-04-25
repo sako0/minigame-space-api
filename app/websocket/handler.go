@@ -73,6 +73,19 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 					log.Printf("Error sending client-joined event to client: %v", err)
 					h.roomUsecase.DisconnectClient(client.RoomId(), client)
 				}
+			case "leave-room":
+				h.roomUsecase.DisconnectClient(client.RoomId(), client)
+
+				// 全てのクライアントに leave-room イベントをブロードキャスト
+				leaveRoomMsg := map[string]interface{}{
+					"type":   "leave-room",
+					"userId": client.UserId(),
+				}
+
+				err = h.roomUsecase.BroadcastMessageToOtherClients(client, &model.Message{Payload: leaveRoomMsg})
+				if err != nil {
+					log.Printf("Error broadcasting leave-room event: %v", err)
+				}
 
 			case "offer", "answer", "ice-candidate":
 				toUserId, ok := msg["toUserId"].(string)

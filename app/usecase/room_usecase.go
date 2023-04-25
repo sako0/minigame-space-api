@@ -49,6 +49,28 @@ func (uc *RoomUsecase) DisconnectClient(roomId string, client *model.Client) {
 		client.Conn().Close()
 	}
 }
+func (uc *RoomUsecase) BroadcastMessageToOtherClients(client *model.Client, msg *model.Message) error {
+	roomId := client.RoomId()
+	room, ok := uc.roomRepo.GetRoom(roomId)
+	if !ok {
+		return fmt.Errorf("Room not found: %s", roomId)
+	}
+
+	msgPayload := msg.Payload
+	msgPayload["userId"] = client.UserId()
+
+	for otherClient := range room.Clients {
+		if otherClient != client {
+			err := otherClient.Conn().WriteJSON(msgPayload)
+			if err != nil {
+				log.Printf("Error writing JSON: %v", err)
+				uc.DisconnectClient(roomId, otherClient)
+			}
+		}
+	}
+
+	return nil
+}
 
 func (uc *RoomUsecase) SendRoomJoinedEvent(client *model.Client) ([]string, error) {
 	roomId := client.RoomId()
