@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
@@ -25,7 +27,7 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 	defer conn.Close()
 
-	client := &model.Client{}
+	userLocation := &model.UserLocation{}
 
 	for {
 		var msg = map[string]interface{}{}
@@ -33,70 +35,78 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
-			h.roomUsecase.DisconnectClient(client.RoomId(), client)
+			h.roomUsecase.DisconnectClient(userLocation.RoomID, userLocation)
 			break
 		}
 
-		roomId, ok := msg["roomId"].(string)
-		if !ok {
+		roomIdInt, err := strconv.Atoi(msg["roomId"].(string))
+		if err != nil {
 			log.Printf("roomId is missing")
 			return
 		}
-		userId, ok := msg["userId"].(string)
+
+		roomId := uint(roomIdInt)
+		firebaseUid, ok := msg["userId"].(string)
 		if !ok {
-			log.Printf("userId is missing")
+			log.Printf("firebaseUid is missing")
 			return
 		}
-		client = model.NewClient(conn, roomId, userId)
+		areaId := uint(1)
 
-		h.roomUsecase.ConnectClient(roomId, userId, conn)
-
+		userLocation, err = h.roomUsecase.ConnectClient(roomId, areaId, firebaseUid, conn)
+		if err != nil {
+			log.Printf("Error connecting client: %v", err)
+			break
+		}
+		log.Printf("userLocation: %v", userLocation)
 		log.Printf("Received message: %v", msg)
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
 			case "join-room":
-				connectedUserIds, err := h.roomUsecase.SendRoomJoinedEvent(client)
+				connectedUserIds, err := h.roomUsecase.SendRoomJoinedEvent(roomId)
+				fmt.Println(connectedUserIds)
 				if err != nil {
 					log.Printf("Error sending room joined event: %v", err)
-					h.roomUsecase.DisconnectClient(client.RoomId(), client)
+					h.roomUsecase.DisconnectClient(userLocation.RoomID, userLocation)
 					break
 				}
 
 				roomJoinedMsg := map[string]interface{}{
 					"type":             "client-joined",
 					"connectedUserIds": connectedUserIds,
-					"userId":           client.UserId(),
+					"userId":           userLocation.User.ID,
 				}
 
-				err = client.Conn().WriteJSON(roomJoinedMsg)
+				err = userLocation.User.Conn.WriteJSON(roomJoinedMsg)
 				if err != nil {
 					log.Printf("Error sending client-joined event to client: %v", err)
-					h.roomUsecase.DisconnectClient(client.RoomId(), client)
+					h.roomUsecase.DisconnectClient(userLocation.RoomID, userLocation)
 				}
 			case "leave-room":
-				h.roomUsecase.DisconnectClient(client.RoomId(), client)
+				h.roomUsecase.DisconnectClient(userLocation.RoomID, userLocation)
 
 				// 全てのクライアントに leave-room イベントをブロードキャスト
 				leaveRoomMsg := map[string]interface{}{
 					"type":   "leave-room",
-					"userId": client.UserId(),
+					"userId": userLocation.User.ID,
 				}
 
-				err = h.roomUsecase.BroadcastMessageToOtherClients(client, &model.Message{Payload: leaveRoomMsg})
+				err = h.roomUsecase.BroadcastMessageToOtherClients(userLocation, &model.Message{Payload: leaveRoomMsg})
 				if err != nil {
 					log.Printf("Error broadcasting leave-room event: %v", err)
 				}
 
 			case "offer", "answer", "ice-candidate":
-				toUserId, ok := msg["toUserId"].(string)
+				toUserIdFloat, ok := msg["toUserId"].(float64)
 				if !ok {
 					log.Printf("toUserId is missing")
 					return
 				}
+				toUserId := uint(toUserIdFloat)
 				// 送信先が自分自身でなければメッセージを送信する
-				if toUserId != client.UserId() {
+				if toUserId != userLocation.User.ID {
 					msgPayload := &model.Message{Payload: msg}
-					h.roomUsecase.SendMessageToOtherClients(client, toUserId, msgPayload)
+					h.roomUsecase.SendMessageToOtherClients(userLocation, toUserId, msgPayload)
 				}
 			}
 		}

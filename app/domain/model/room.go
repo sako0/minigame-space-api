@@ -1,9 +1,19 @@
 package model
 
+import (
+	"gorm.io/gorm"
+)
+
 type Room struct {
-	Clients map[*Client]bool
+	gorm.Model
+	AreaID        uint
+	Area          Area
+	RoomTypeID    uint
+	RoomType      RoomType
+	Status        int
+	UserLocations []UserLocation
 }
 
-func NewRoom() *Room {
-	return &Room{Clients: make(map[*Client]bool)}
+func NewRoom(areaId, roomTypeId uint) *Room {
+	return &Room{AreaID: areaId, RoomTypeID: roomTypeId, Status: 0}
 }
