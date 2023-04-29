@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
@@ -13,10 +14,16 @@ import (
 type WebSocketHandler struct {
 	roomUsecase usecase.RoomUsecase
 	upgrader    websocket.Upgrader
+	connections map[uint]*websocket.Conn
+	mu          sync.RWMutex
 }
 
 func NewWebSocketHandler(roomUsecase usecase.RoomUsecase, upgrader websocket.Upgrader) *WebSocketHandler {
-	return &WebSocketHandler{roomUsecase: roomUsecase, upgrader: upgrader}
+	return &WebSocketHandler{
+		roomUsecase: roomUsecase,
+		upgrader:    upgrader,
+		connections: make(map[uint]*websocket.Conn),
+	}
 }
 
 func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +33,8 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 	defer conn.Close()
 
-	userLocation := &model.UserLocation{}
+	var user *model.User
+	var userLocation *model.UserLocation
 
 	for {
 		var msg = map[string]interface{}{}
@@ -34,8 +42,24 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
-			h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
+			if userLocation != nil {
+				h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
+			}
 			break
+		}
+
+		if user == nil {
+			firebaseUid, ok := msg["userId"].(string)
+			if !ok {
+				log.Printf("userId is missing")
+				return
+			}
+
+			user, err = h.roomUsecase.GetUserByFirebaseUID(firebaseUid)
+			if err != nil {
+				log.Printf("Error getting user: %v", err)
+				return
+			}
 		}
 
 		roomIdStr, ok := msg["roomId"].(string)
@@ -46,17 +70,6 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		roomId, err := strconv.ParseUint(roomIdStr, 10, 32)
 		if err != nil {
 			log.Printf("Invalid roomId: %v", err)
-			return
-		}
-		firebaseUid, ok := msg["userId"].(string)
-		if !ok {
-			log.Printf("userId is missing")
-			return
-		}
-
-		user, err := h.roomUsecase.GetUserByFirebaseUID(firebaseUid)
-		if err != nil {
-			log.Printf("Error getting user: %v", err)
 			return
 		}
 
@@ -83,6 +96,10 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
 			case "join-room":
+				h.mu.Lock()
+				h.connections[user.ID] = conn
+				h.mu.Unlock()
+				log.Printf("connections: %v", h.connections)
 				_, err := h.roomUsecase.SendRoomJoinedEvent(userLocation)
 				if err != nil {
 					log.Printf("Error sending room joined event: %v", err)
@@ -91,8 +108,10 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 				}
 
 			case "leave-room":
+				h.mu.Lock()
+				delete(h.connections, user.ID)
+				h.mu.Unlock()
 				h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
-
 			case "offer", "answer", "ice-candidate":
 				toUserId, ok := msg["toUserId"].(float64)
 				if !ok {
@@ -107,15 +126,25 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 				}
 
 				for _, toUserLocation := range toUserLocations {
-					if toUserLocation.Conn == nil {
-						err := toUserLocation.Conn.WriteJSON(msg)
-						if err != nil {
-							log.Printf("Error writing JSON: %v", err)
-							return
-						}
+					toUserConn, ok := h.GetConnectionByUserID(toUserLocation.UserID)
+					if !ok {
+						log.Printf("Error: websocket.Conn not found for user %d", toUserLocation.UserID)
+						return
+					}
+					err := toUserConn.WriteJSON(msg)
+					if err != nil {
+						log.Printf("Error writing JSON: %v", err)
+						return
 					}
 				}
 			}
 		}
 	}
+}
+
+func (h *WebSocketHandler) GetConnectionByUserID(userID uint) (*websocket.Conn, bool) {
+	h.mu.RLock()
+	conn, ok := h.connections[userID]
+	h.mu.RUnlock()
+	return conn, ok
 }
