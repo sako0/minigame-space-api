@@ -1,13 +1,10 @@
 package usecase
 
 import (
-	"errors"
-	"fmt"
+	"log"
 
-	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
 	"github.com/sako0/minigame-space-api/app/domain/repository"
-	"gorm.io/gorm"
 )
 
 type RoomUsecase struct {
@@ -21,41 +18,15 @@ func NewRoomUsecase(roomRepo repository.RoomRepository, areaRepo repository.Area
 	return &RoomUsecase{roomRepo: roomRepo, areaRepo: areaRepo, userRepo: userRepo, userLocationRepo: userLocationRepo}
 }
 
-func (uc *RoomUsecase) ConnectUserLocation(room *model.Room, user *model.User, conn *websocket.Conn) (*model.UserLocation, error) {
-
-	area, err := uc.areaRepo.GetArea(room.AreaID)
-	if err != nil {
-		return nil, err
-	}
-	userLocation, err := uc.userLocationRepo.GetUserLocation(user.ID)
-	userLocation = &model.UserLocation{
-		UserID: user.ID,
-		AreaID: area.ID,
-		RoomID: room.ID,
-	}
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-
-			err = uc.userLocationRepo.AddUserLocation(userLocation)
-			return userLocation, err
-		}
-		return nil, err
-	}
-	uc.userLocationRepo.UpdateUserLocation(userLocation)
+func (uc *RoomUsecase) ConnectUserLocation(userLocation *model.UserLocation) (*model.UserLocation, error) {
 	// 既に同じUserLocationが接続している場合は何もしない
-	for _, otherUserLocation := range room.UserLocations {
-		if otherUserLocation.RoomID == room.ID && otherUserLocation.UserID == user.ID {
-			return nil, nil
+	for _, otherUserLocation := range userLocation.Room.UserLocations {
+		if otherUserLocation.RoomID == userLocation.Room.ID && otherUserLocation.UserID == userLocation.User.ID {
+			return userLocation, nil
 		}
 	}
-	err = uc.userLocationRepo.UpdateUserLocation(userLocation)
+	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
-		return nil, err
-	}
-
-	room.UserLocations = append(room.UserLocations, *userLocation)
-	// ルームをデータベースに保存
-	if err := uc.roomRepo.UpdateRoom(room); err != nil {
 		return nil, err
 	}
 	return userLocation, nil
@@ -85,39 +56,41 @@ func (uc *RoomUsecase) DisconnectUserLocation(roomId uint, userLocation *model.U
 func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]uint, error) {
 	userLocations, err := uc.userLocationRepo.GetUserLocationsByRoom(userLocation.RoomID)
 	if err != nil {
+		log.Printf("Error sending room joined event: %v", err)
+		uc.DisconnectUserLocation(userLocation.RoomID, userLocation)
 		return nil, err
 	}
-
 	var connectedUserIds []uint
 	for _, ul := range userLocations {
-		if ul.ID != userLocation.ID {
-			connectedUserIds = append(connectedUserIds, ul.UserID)
-			err := ul.Conn.WriteJSON(map[string]interface{}{
-				"type":   "user-joined",
-				"userId": userLocation.UserID,
-			})
-			if err != nil {
-				return nil, errors.New("error sending user-joined event to other clients")
-			}
-		}
+		connectedUserIds = append(connectedUserIds, ul.UserID)
+	}
+	log.Println(connectedUserIds)
+	roomJoinedMsg := map[string]interface{}{
+		"type":             "client-joined",
+		"connectedUserIds": connectedUserIds,
+		"userId":           userLocation.UserID,
+	}
+
+	err = userLocation.Conn.WriteJSON(roomJoinedMsg)
+	if err != nil {
+		log.Printf("Error sending client-joined event to client: %v", err)
+		uc.DisconnectUserLocation(userLocation.RoomID, userLocation)
 	}
 
 	return connectedUserIds, nil
 }
 
-func (uc *RoomUsecase) FindUserLocationInRoom(roomId uint, userId uint) (*model.UserLocation, error) {
-	room, err := uc.roomRepo.GetRoom(roomId)
-	if err != nil {
-		return nil, err
-	}
+func (uc *RoomUsecase) FindUserLocationInRoom(room *model.Room, userId uint) ([]*model.UserLocation, error) {
 
+	var userLocations []*model.UserLocation
 	for _, userLocation := range room.UserLocations {
 		if userLocation.UserID == userId {
-			return &userLocation, nil
+			userLocations = append(userLocations, &userLocation)
 		}
 	}
+	log.Printf("userLocation founding for user %v in room %v", userId, room.ID)
 
-	return nil, fmt.Errorf("UserLocation not found for user %d in room %d", userId, roomId)
+	return userLocations, nil
 }
 func (uc *RoomUsecase) GetUserByFirebaseUID(firebaseUid string) (*model.User, error) {
 	return uc.userRepo.GetUserByFirebaseUID(firebaseUid)

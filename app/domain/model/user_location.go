@@ -19,11 +19,17 @@ type UserLocation struct {
 	Conn     *websocket.Conn `gorm:"-"`
 }
 
-func NewUserLocation(user *User, room *Room, area *Area, conn *websocket.Conn) *UserLocation {
+func NewUserLocation(user *User, area *Area, room *Room, xAxis int, yAxis int, joinedAt int, conn *websocket.Conn) *UserLocation {
 	return &UserLocation{
-		User: *user,
-		Room: *room,
-		Area: *area,
-		Conn: conn,
+		UserID:   user.ID,
+		User:     *user,
+		AreaID:   area.ID,
+		Area:     *area,
+		RoomID:   room.ID,
+		Room:     *room,
+		XAxis:    xAxis,
+		YAxis:    yAxis,
+		JoinedAt: joinedAt,
+		Conn:     conn,
 	}
 }

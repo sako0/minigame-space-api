@@ -71,59 +71,49 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 			log.Printf("Error getting area: %v", err)
 			return
 		}
-		userLocation = model.NewUserLocation(user, room, area, conn)
+		userLocation = model.NewUserLocation(user, area, room, 1, 1, 1, conn)
 
-		h.roomUsecase.ConnectUserLocation(room, user, conn)
+		userLocation, err = h.roomUsecase.ConnectUserLocation(userLocation)
+		if err != nil {
+			log.Printf("Error connecting user location: %v", err)
+			return
+		}
 
 		log.Printf("Received message: %v", msg)
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
 			case "join-room":
-				connectedUserIds, err := h.roomUsecase.SendRoomJoinedEvent(userLocation)
+				_, err := h.roomUsecase.SendRoomJoinedEvent(userLocation)
 				if err != nil {
 					log.Printf("Error sending room joined event: %v", err)
 					h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
 					break
-				}
-				log.Println(connectedUserIds)
-				roomJoinedMsg := map[string]interface{}{
-					"type":             "client-joined",
-					"connectedUserIds": connectedUserIds,
-					"userId":           userLocation.UserID,
-				}
-
-				err = userLocation.Conn.WriteJSON(roomJoinedMsg)
-				if err != nil {
-					log.Printf("Error sending client-joined event to client: %v", err)
-					h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
 				}
 
 			case "leave-room":
 				h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
 
 			case "offer", "answer", "ice-candidate":
-				toUserIdStr, ok := msg["toUserId"].(string)
+				toUserId, ok := msg["toUserId"].(float64)
 				if !ok {
-					log.Printf("targetUserId is missing")
-					return
-				}
-				toUserId, err := strconv.ParseUint(toUserIdStr, 10, 32)
-				if err != nil {
-					log.Printf("Invalid targetUserId: %v", err)
+					log.Printf("toUserId is missing")
 					return
 				}
 
-				toUserLocation, err := h.roomUsecase.FindUserLocationInRoom(uint(roomId), uint(toUserId))
+				toUserLocations, err := h.roomUsecase.FindUserLocationInRoom(room, uint(toUserId))
 				if err != nil {
 					log.Printf("Error finding target user location: %v", err)
 					return
 				}
 
-				err = toUserLocation.Conn.WriteJSON(msg)
-				if err != nil {
-					log.Printf("Error sending %s event to target user: %v", val.(string), err)
-					h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
-					return
+				for _, toUserLocation := range toUserLocations {
+					if toUserLocation.Conn == nil {
+						err := toUserLocation.Conn.WriteJSON(msg)
+						if err != nil {
+							log.Printf("Error writing JSON: %v", err)
+							return
+						}
+					}
 				}
 			}
 		}
