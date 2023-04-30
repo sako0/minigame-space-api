@@ -8,8 +8,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sako0/minigame-space-api/app/config"
 	"github.com/sako0/minigame-space-api/app/database"
-	"github.com/sako0/minigame-space-api/app/infra"
-	"github.com/sako0/minigame-space-api/app/infra/memory"
+	memory "github.com/sako0/minigame-space-api/app/infra/memory"
+	infra "github.com/sako0/minigame-space-api/app/infra/mysql"
+
 	"github.com/sako0/minigame-space-api/app/usecase"
 	handler "github.com/sako0/minigame-space-api/app/websocket"
 )

@@ -1,5 +1,5 @@
 // app/infra/memory/connection_store.go
-package memory
+package infra
 
 import (
 	"sync"
