@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
@@ -14,15 +13,12 @@ import (
 type WebSocketHandler struct {
 	roomUsecase usecase.RoomUsecase
 	upgrader    websocket.Upgrader
-	connections map[uint]*websocket.Conn
-	mu          sync.RWMutex
 }
 
 func NewWebSocketHandler(roomUsecase usecase.RoomUsecase, upgrader websocket.Upgrader) *WebSocketHandler {
 	return &WebSocketHandler{
 		roomUsecase: roomUsecase,
 		upgrader:    upgrader,
-		connections: make(map[uint]*websocket.Conn),
 	}
 }
 
@@ -31,7 +27,7 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
+	// defer conn.Close()
 
 	var user *model.User
 	var userLocation *model.UserLocation
@@ -43,7 +39,7 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
 			if userLocation != nil {
-				h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
+				h.roomUsecase.DisconnectUserLocation(userLocation)
 			}
 			break
 		}
@@ -61,7 +57,6 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
-
 		roomIdStr, ok := msg["roomId"].(string)
 		if !ok {
 			log.Printf("roomId is missing")
@@ -96,55 +91,48 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
 			case "join-room":
-				h.mu.Lock()
-				h.connections[user.ID] = conn
-				h.mu.Unlock()
-				log.Printf("connections: %v", h.connections)
-				_, err := h.roomUsecase.SendRoomJoinedEvent(userLocation)
+
+				h.roomUsecase.StoreConnection(user, conn)
+				log.Printf("connectionsがこのメモリにstoreされました: %v", conn)
+				_, err = h.roomUsecase.SendRoomJoinedEvent(userLocation)
 				if err != nil {
 					log.Printf("Error sending room joined event: %v", err)
-					h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
+					h.roomUsecase.DisconnectUserLocation(userLocation)
 					break
 				}
 
 			case "leave-room":
-				h.mu.Lock()
-				delete(h.connections, user.ID)
-				h.mu.Unlock()
-				h.roomUsecase.DisconnectUserLocation(userLocation.RoomID, userLocation)
+				h.roomUsecase.RemoveConnection(user)
+				h.roomUsecase.DisconnectUserLocation(userLocation)
 			case "offer", "answer", "ice-candidate":
-				toUserId, ok := msg["toUserId"].(float64)
-				if !ok {
+				toUserId, _ := msg["toUserId"].(float64)
+				if toUserId == 0 {
 					log.Printf("toUserId is missing")
 					return
 				}
 
-				toUserLocations, err := h.roomUsecase.FindUserLocationInRoom(room, uint(toUserId))
+				toUserLocation, err := h.roomUsecase.FindUserLocationInRoom(uint(toUserId))
 				if err != nil {
-					log.Printf("Error finding target user location: %v", err)
+					log.Printf("Error finding user location in room: %v", err)
+					return
+				}
+				if toUserLocation == nil {
+					log.Printf("toUserLocation is missing")
+					return
+				}
+				// Check if WebSocket connection exists for the target user
+				toUserConn, ok := h.roomUsecase.GetConnectionByUserID(toUserLocation.UserID)
+				if !ok {
+					log.Printf("Info: websocket.Conn not found for user %d", toUserLocation.UserID)
+					continue // Skip sending the message and continue with the next iteration
+				}
+				err = toUserConn.WriteJSON(msg)
+				if err != nil {
+					log.Printf("Error writing JSON: %v", err)
 					return
 				}
 
-				for _, toUserLocation := range toUserLocations {
-					toUserConn, ok := h.GetConnectionByUserID(toUserLocation.UserID)
-					if !ok {
-						log.Printf("Error: websocket.Conn not found for user %d", toUserLocation.UserID)
-						return
-					}
-					err := toUserConn.WriteJSON(msg)
-					if err != nil {
-						log.Printf("Error writing JSON: %v", err)
-						return
-					}
-				}
 			}
 		}
 	}
-}
-
-func (h *WebSocketHandler) GetConnectionByUserID(userID uint) (*websocket.Conn, bool) {
-	h.mu.RLock()
-	conn, ok := h.connections[userID]
-	h.mu.RUnlock()
-	return conn, ok
 }

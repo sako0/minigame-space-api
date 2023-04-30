@@ -9,6 +9,7 @@ import (
 	"github.com/sako0/minigame-space-api/app/config"
 	"github.com/sako0/minigame-space-api/app/database"
 	"github.com/sako0/minigame-space-api/app/infra"
+	"github.com/sako0/minigame-space-api/app/infra/memory"
 	"github.com/sako0/minigame-space-api/app/usecase"
 	handler "github.com/sako0/minigame-space-api/app/websocket"
 )
@@ -36,7 +37,8 @@ func main() {
 	areaRepo := infra.NewAreaRepository(db)
 	roomRepo := infra.NewRoomRepository(db)
 	userLocationRepo := infra.NewUserLocationRepository(db)
-	roomUsecase := usecase.NewRoomUsecase(roomRepo, areaRepo, userRepo, userLocationRepo)
+	connectionStoreRepo := memory.NewConnectionStore()
+	roomUsecase := usecase.NewRoomUsecase(roomRepo, areaRepo, userRepo, userLocationRepo, connectionStoreRepo)
 	wsHandler := handler.NewWebSocketHandler(*roomUsecase, upgrader)
 
 	e := echo.New()
