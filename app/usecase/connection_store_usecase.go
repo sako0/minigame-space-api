@@ -18,11 +18,11 @@ func NewConnectionStoreUsecase(connectionStoreRepo repository.ConnectionStoreRep
 	return &ConnectionStoreUsecase{connectionStoreRepo: connectionStoreRepo, mutex: &sync.Mutex{}}
 }
 
-func (cu *ConnectionStoreUsecase) StoreConnection(user *model.User, conn *websocket.Conn) {
+func (cu *ConnectionStoreUsecase) StoreUserLocation(userLocation *model.UserLocation) {
 	cu.mutex.Lock()
 	defer cu.mutex.Unlock()
 
-	cu.connectionStoreRepo.StoreConnection(user, conn)
+	cu.connectionStoreRepo.StoreConnection(userLocation)
 }
 
 func (cu *ConnectionStoreUsecase) RemoveConnection(user *model.User) {
@@ -36,7 +36,11 @@ func (cu *ConnectionStoreUsecase) GetConnectionByUserID(userID uint) (*websocket
 	cu.mutex.Lock()
 	defer cu.mutex.Unlock()
 
-	conn, ok := cu.connectionStoreRepo.GetConnectionByUserID(userID)
+	userLocation, ok := cu.connectionStoreRepo.GetUserLocationByUserID(userID)
 
-	return conn, ok
+	if ok {
+		return userLocation.Conn, ok
+	}
+
+	return nil, false
 }

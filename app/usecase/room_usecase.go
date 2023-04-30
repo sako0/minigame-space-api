@@ -4,6 +4,7 @@ package usecase
 import (
 	"log"
 
+	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
 	"github.com/sako0/minigame-space-api/app/domain/repository"
 )
@@ -32,7 +33,7 @@ func (uc *RoomUsecase) ConnectUserLocation(userLocation *model.UserLocation) (*m
 		return nil, err
 	}
 	if userLocation.Conn != nil {
-		uc.storeRepo.StoreConnection(&userLocation.User, userLocation.Conn)
+		uc.storeRepo.StoreConnection(userLocation)
 	}
 	return userLocation, nil
 }
@@ -61,21 +62,32 @@ func (uc *RoomUsecase) DisconnectUserLocation(userLocation *model.UserLocation) 
 }
 
 func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]uint, error) {
-	userLocations, err := uc.userLocationRepo.GetUserLocationsByRoom(userLocation.RoomID)
+	userLocations, err := uc.userLocationRepo.GetUserLocationsByRoom(userLocation.Room.ID)
 	if err != nil {
 		log.Printf("Error sending room joined event: %v", err)
 		uc.DisconnectUserLocation(userLocation)
 		return nil, err
 	}
-	var connectedUserIds []uint
+	// 接続中のユーザーIDを取得する
+	connectedUserIds := uc.storeRepo.GetConnectedUserIdsInRoom(userLocation.Room.ID)
+	log.Println(userLocations)
 	for _, ul := range userLocations {
-		connectedUserIds = append(connectedUserIds, ul.UserID)
+		// Skip the current user to prevent adding their own ID
+		if ul.User.ID == userLocation.User.ID {
+			continue
+		}
+
+		// Check if the user has an active connection
+		if _, ok := uc.storeRepo.GetUserLocationByUserID(ul.User.ID); ok {
+			connectedUserIds = append(connectedUserIds, ul.User.ID)
+		}
 	}
+
 	log.Println(connectedUserIds)
 	roomJoinedMsg := map[string]interface{}{
 		"type":             "client-joined",
 		"connectedUserIds": connectedUserIds,
-		"userId":           userLocation.UserID,
+		"userId":           userLocation.User.ID,
 	}
 
 	err = userLocation.Conn.WriteJSON(roomJoinedMsg)
@@ -87,20 +99,9 @@ func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]
 	return connectedUserIds, nil
 }
 
-func (uc *RoomUsecase) HandleSignalMessage(userLocation *model.UserLocation, msg map[string]interface{}) {
-	targetUserID, ok := msg["toUserId"].(float64)
-	if !ok {
-		log.Printf("!!user ID %v をfloat64に変換できませんでした!!", msg["targetUserId"])
-		return
-	}
+func (uc *RoomUsecase) HandleSignalMessage(userLocation *model.UserLocation, toUserConn *websocket.Conn, msg map[string]interface{}) {
 
-	targetConn, ok := uc.storeRepo.GetConnectionByUserID(uint(targetUserID)) // Changed this line to use the connection store use case
-	if !ok {
-		log.Printf("Connection not found for target user ID %d", uint(targetUserID))
-		return
-	}
-
-	err := targetConn.WriteJSON(msg)
+	err := toUserConn.WriteJSON(msg)
 	if err != nil {
 		log.Printf("Error sending signal message to target user: %v", err)
 		uc.DisconnectUserLocation(userLocation)

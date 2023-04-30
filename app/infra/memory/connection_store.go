@@ -4,26 +4,25 @@ package infra
 import (
 	"sync"
 
-	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
 	"github.com/sako0/minigame-space-api/app/domain/repository"
 )
 
 type ConnectionStore struct {
-	connections map[uint]*websocket.Conn
+	connections map[uint]*model.UserLocation
 	mu          sync.RWMutex
 }
 
 func NewConnectionStore() repository.ConnectionStoreRepository {
 	return &ConnectionStore{
-		connections: make(map[uint]*websocket.Conn),
+		connections: make(map[uint]*model.UserLocation),
 	}
 }
 
-func (s *ConnectionStore) StoreConnection(user *model.User, conn *websocket.Conn) {
+func (s *ConnectionStore) StoreConnection(userLocation *model.UserLocation) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.connections[user.ID] = conn
+	s.connections[userLocation.User.ID] = userLocation
 }
 
 func (s *ConnectionStore) RemoveConnection(user *model.User) {
@@ -31,25 +30,35 @@ func (s *ConnectionStore) RemoveConnection(user *model.User) {
 	defer s.mu.Unlock()
 	delete(s.connections, user.ID)
 }
-
-func (s *ConnectionStore) GetConnectionByUserID(userID uint) (*websocket.Conn, bool) {
+func (s *ConnectionStore) GetUserLocationByUserID(userID uint) (*model.UserLocation, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	conn, ok := s.connections[userID]
-	return conn, ok
+	userLocation, ok := s.connections[userID]
+	return userLocation, ok
 }
 
 func (s *ConnectionStore) FindUserLocationInRoom(room *model.Room, userId uint) *model.UserLocation {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var userLocation *model.UserLocation
+	userLocation, ok := s.connections[userId]
 
-	if userLocation != nil && userLocation.UserID == userId && s.connections[userLocation.UserID] != nil {
-		userLocation = &model.UserLocation{
-			UserID: userId,
+	if ok && userLocation.Room.ID == room.ID {
+		return userLocation
+	}
+
+	return nil
+}
+func (c *ConnectionStore) GetConnectedUserIdsInRoom(roomId uint) []uint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	userIds := []uint{}
+	for _, userLocation := range c.connections {
+		if userLocation.Room.ID == roomId {
+			userIds = append(userIds, userLocation.User.ID)
 		}
 	}
 
-	return userLocation
+	return userIds
 }
