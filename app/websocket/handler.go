@@ -11,14 +11,16 @@ import (
 )
 
 type WebSocketHandler struct {
-	roomUsecase usecase.RoomUsecase
-	upgrader    websocket.Upgrader
+	roomUsecase       usecase.RoomUsecase
+	connectionUsecase usecase.ConnectionStoreUsecase
+	upgrader          websocket.Upgrader
 }
 
-func NewWebSocketHandler(roomUsecase usecase.RoomUsecase, upgrader websocket.Upgrader) *WebSocketHandler {
+func NewWebSocketHandler(roomUsecase usecase.RoomUsecase, connectionUsecase usecase.ConnectionStoreUsecase, upgrader websocket.Upgrader) *WebSocketHandler {
 	return &WebSocketHandler{
-		roomUsecase: roomUsecase,
-		upgrader:    upgrader,
+		roomUsecase:       roomUsecase,
+		connectionUsecase: connectionUsecase,
+		upgrader:          upgrader,
 	}
 }
 
@@ -27,20 +29,17 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Fatal(err)
 	}
-	// defer conn.Close()
 
 	var user *model.User
 	var userLocation *model.UserLocation
 
-	for {
+	// Process "join-room" event once
+	for userLocation == nil {
 		var msg = map[string]interface{}{}
 
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
-			if userLocation != nil {
-				h.roomUsecase.DisconnectUserLocation(userLocation)
-			}
 			break
 		}
 
@@ -87,51 +86,59 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		log.Printf("Received message: %v", msg)
 		if val, ok := msg["type"]; ok {
-			switch val.(string) {
-			case "join-room":
-
-				h.roomUsecase.StoreConnection(user, conn)
-				log.Printf("connectionsがこのメモリにstoreされました: %v", conn)
+			if val.(string) == "join-room" {
+				userLocation.Conn = conn
+				h.connectionUsecase.StoreConnection(user, conn)
 				_, err = h.roomUsecase.SendRoomJoinedEvent(userLocation)
 				if err != nil {
 					log.Printf("Error sending room joined event: %v", err)
 					h.roomUsecase.DisconnectUserLocation(userLocation)
 					break
 				}
+			}
+		}
+	}
 
+	// Process other events
+	for {
+		var msg = map[string]interface{}{}
+
+		err := conn.ReadJSON(&msg)
+		if err != nil {
+			log.Printf("Error reading JSON: %v", err)
+			if userLocation != nil {
+				h.roomUsecase.DisconnectUserLocation(userLocation)
+			}
+			break
+		}
+
+		if user == nil {
+			firebaseUid, ok := msg["userId"].(string)
+			if !ok {
+				log.Printf("userId is missing")
+				return
+			}
+
+			user, err = h.roomUsecase.GetUserByFirebaseUID(firebaseUid)
+			if err != nil {
+				log.Printf("Error getting user: %v", err)
+				return
+			}
+		}
+
+		log.Printf("msg: %v", msg)
+
+		if val, ok := msg["type"]; ok {
+			switch val.(string) {
 			case "leave-room":
-				h.roomUsecase.RemoveConnection(user)
+				h.connectionUsecase.RemoveConnection(user)
 				h.roomUsecase.DisconnectUserLocation(userLocation)
 			case "offer", "answer", "ice-candidate":
-				toUserId, _ := msg["toUserId"].(float64)
-				if toUserId == 0 {
-					log.Printf("toUserId is missing")
-					return
-				}
+				// Process offer, answer, ice-candidate events
+				log.Printf("メッセージタイプは[ %v ]です。 ユーザーID:[ %d ]から送られました", msg["type"], userLocation.User.ID)
 
-				toUserLocation, err := h.roomUsecase.FindUserLocationInRoom(uint(toUserId))
-				if err != nil {
-					log.Printf("Error finding user location in room: %v", err)
-					return
-				}
-				if toUserLocation == nil {
-					log.Printf("toUserLocation is missing")
-					return
-				}
-				// Check if WebSocket connection exists for the target user
-				toUserConn, ok := h.roomUsecase.GetConnectionByUserID(toUserLocation.UserID)
-				if !ok {
-					log.Printf("Info: websocket.Conn not found for user %d", toUserLocation.UserID)
-					continue // Skip sending the message and continue with the next iteration
-				}
-				err = toUserConn.WriteJSON(msg)
-				if err != nil {
-					log.Printf("Error writing JSON: %v", err)
-					return
-				}
-
+				h.roomUsecase.HandleSignalMessage(userLocation, msg)
 			}
 		}
 	}

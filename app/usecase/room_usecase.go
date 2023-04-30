@@ -1,26 +1,23 @@
+// app/usecase/room_usecase.go
 package usecase
 
 import (
 	"log"
 
-	"github.com/gorilla/websocket"
-	"gorm.io/gorm"
-
 	"github.com/sako0/minigame-space-api/app/domain/model"
 	"github.com/sako0/minigame-space-api/app/domain/repository"
 )
 
-// app/usecase/room_usecase.go
 type RoomUsecase struct {
 	roomRepo         repository.RoomRepository
 	areaRepo         repository.AreaRepository
 	userRepo         repository.UserRepository
 	userLocationRepo repository.UserLocationRepository
-	connectionStore  repository.ConnectionStoreRepository
+	storeRepo        repository.ConnectionStoreRepository
 }
 
-func NewRoomUsecase(roomRepo repository.RoomRepository, areaRepo repository.AreaRepository, userRepo repository.UserRepository, userLocationRepo repository.UserLocationRepository, connectionStore repository.ConnectionStoreRepository) *RoomUsecase {
-	return &RoomUsecase{roomRepo: roomRepo, areaRepo: areaRepo, userRepo: userRepo, userLocationRepo: userLocationRepo, connectionStore: connectionStore}
+func NewRoomUsecase(roomRepo repository.RoomRepository, areaRepo repository.AreaRepository, userRepo repository.UserRepository, userLocationRepo repository.UserLocationRepository, storeRepo repository.ConnectionStoreRepository) *RoomUsecase {
+	return &RoomUsecase{roomRepo: roomRepo, areaRepo: areaRepo, userRepo: userRepo, userLocationRepo: userLocationRepo, storeRepo: storeRepo}
 }
 
 func (uc *RoomUsecase) ConnectUserLocation(userLocation *model.UserLocation) (*model.UserLocation, error) {
@@ -33,6 +30,9 @@ func (uc *RoomUsecase) ConnectUserLocation(userLocation *model.UserLocation) (*m
 	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
 		return nil, err
+	}
+	if userLocation.Conn != nil {
+		uc.storeRepo.StoreConnection(&userLocation.User, userLocation.Conn)
 	}
 	return userLocation, nil
 }
@@ -55,7 +55,7 @@ func (uc *RoomUsecase) DisconnectUserLocation(userLocation *model.UserLocation) 
 		}
 	}
 	if userLocation.Conn != nil {
-		uc.connectionStore.RemoveConnection(&userLocation.User) // コネクションを削除する
+		uc.storeRepo.RemoveConnection(&userLocation.User) // Changed this line to use the connection store use case
 		userLocation.Conn.Close()
 	}
 }
@@ -87,19 +87,26 @@ func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]
 	return connectedUserIds, nil
 }
 
-func (uc *RoomUsecase) FindUserLocationInRoom(userId uint) (*model.UserLocation, error) {
-
-	userLocation, err := uc.userLocationRepo.GetUserLocation(userId)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-
-			return nil, nil
-		}
-		return nil, err
+func (uc *RoomUsecase) HandleSignalMessage(userLocation *model.UserLocation, msg map[string]interface{}) {
+	targetUserID, ok := msg["toUserId"].(float64)
+	if !ok {
+		log.Printf("!!user ID %v をfloat64に変換できませんでした!!", msg["targetUserId"])
+		return
 	}
 
-	return userLocation, nil
+	targetConn, ok := uc.storeRepo.GetConnectionByUserID(uint(targetUserID)) // Changed this line to use the connection store use case
+	if !ok {
+		log.Printf("Connection not found for target user ID %d", uint(targetUserID))
+		return
+	}
+
+	err := targetConn.WriteJSON(msg)
+	if err != nil {
+		log.Printf("Error sending signal message to target user: %v", err)
+		uc.DisconnectUserLocation(userLocation)
+	}
 }
+
 func (uc *RoomUsecase) GetUserByFirebaseUID(firebaseUid string) (*model.User, error) {
 	return uc.userRepo.GetUserByFirebaseUID(firebaseUid)
 }
@@ -110,16 +117,4 @@ func (uc *RoomUsecase) GetArea(areaId uint) (*model.Area, error) {
 
 func (uc *RoomUsecase) GetRoom(roomId uint) (*model.Room, error) {
 	return uc.roomRepo.GetRoom(roomId)
-}
-
-func (uc *RoomUsecase) StoreConnection(user *model.User, conn *websocket.Conn) {
-	uc.connectionStore.StoreConnection(user, conn)
-}
-
-func (uc *RoomUsecase) RemoveConnection(user *model.User) {
-	uc.connectionStore.RemoveConnection(user)
-}
-
-func (uc *RoomUsecase) GetConnectionByUserID(userID uint) (*websocket.Conn, bool) {
-	return uc.connectionStore.GetConnectionByUserID(userID)
 }
