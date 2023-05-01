@@ -5,5 +5,5 @@ import (
 )
 
 type AreaRepository interface {
-	GetArea(areaId uint) (*model.Area, error)
+	GetArea(areaId string) (*model.Area, error)
 }

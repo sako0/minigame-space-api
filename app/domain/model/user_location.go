@@ -7,11 +7,12 @@ import (
 
 type UserLocation struct {
 	gorm.Model
-	UserID   uint `gorm:"unique"`
+	ID       string `gorm:"type:varchar(36);primaryKey"`
+	UserID   string `gorm:"unique;type:varchar(36)"`
 	User     User
-	AreaID   uint
+	AreaID   string `gorm:"type:varchar(36)"`
 	Area     Area
-	RoomID   uint
+	RoomID   string `gorm:"type:varchar(36)"`
 	Room     Room
 	XAxis    int
 	YAxis    int

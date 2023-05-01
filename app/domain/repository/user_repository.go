@@ -5,6 +5,6 @@ import (
 )
 
 type UserRepository interface {
-	GetUser(userId uint) (*model.User, error)
+	GetUser(userId string) (*model.User, error)
 	GetUserByFirebaseUID(firebaseUID string) (*model.User, error)
 }

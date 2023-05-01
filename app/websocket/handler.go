@@ -3,7 +3,6 @@ package handler
 import (
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
@@ -67,18 +66,17 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
 			case "join-room":
-				roomIdStr, ok := msg["roomId"].(string)
+				roomId, ok := msg["roomId"].(string)
 				if !ok {
 					log.Printf("roomId is missing")
 					return
 				}
-				roomId, err := strconv.ParseUint(roomIdStr, 10, 32)
 				if err != nil {
 					log.Printf("Invalid roomId: %v", err)
 					return
 				}
 
-				room, err := h.roomUsecase.GetRoom(uint(roomId))
+				room, err := h.roomUsecase.GetRoom(roomId)
 				if err != nil {
 					log.Printf("Error getting room: %v", err)
 					return
@@ -136,7 +134,8 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 				h.roomUsecase.DisconnectUserLocation(userLocation)
 
 			case "offer", "answer", "ice-candidate":
-				toUserId := uint(msg["toUserId"].(float64))
+				toUserId := string(msg["toUserId"].(string))
+				log.Printf("toUserId: %v", toUserId)
 				targetConn, ok := h.connectionUsecase.GetConnectionByUserID(toUserId)
 				if !ok {
 					log.Printf("Info getting target connection: %v", err)
@@ -145,7 +144,7 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 				if targetConn != nil {
 					log.Println(targetConn)
 					// Process offer, answer, ice-candidate events
-					log.Printf("ユーザーID:[ %d ]から [ %d ] に送られました。メッセージタイプは[ %v ]です。", userLocation.User.ID, toUserId, msg["type"])
+					log.Printf("ユーザーID:[ %s ]から [ %s ] に送られました。メッセージタイプは[ %v ]です。", userLocation.User.ID, toUserId, msg["type"])
 
 					h.roomUsecase.HandleSignalMessage(userLocation, targetConn, msg)
 				}

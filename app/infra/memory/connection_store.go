@@ -2,6 +2,7 @@
 package infra
 
 import (
+	"log"
 	"sync"
 
 	"github.com/sako0/minigame-space-api/app/domain/model"
@@ -9,13 +10,13 @@ import (
 )
 
 type ConnectionStore struct {
-	connections map[uint]*model.UserLocation
+	connections map[string]*model.UserLocation
 	mu          sync.RWMutex
 }
 
 func NewConnectionStore() repository.ConnectionStoreRepository {
 	return &ConnectionStore{
-		connections: make(map[uint]*model.UserLocation),
+		connections: make(map[string]*model.UserLocation),
 	}
 }
 
@@ -30,14 +31,14 @@ func (s *ConnectionStore) RemoveConnection(user *model.User) {
 	defer s.mu.Unlock()
 	delete(s.connections, user.ID)
 }
-func (s *ConnectionStore) GetUserLocationByUserID(userID uint) (*model.UserLocation, bool) {
+func (s *ConnectionStore) GetUserLocationByUserID(userID string) (*model.UserLocation, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	userLocation, ok := s.connections[userID]
 	return userLocation, ok
 }
 
-func (s *ConnectionStore) FindUserLocationInRoom(room *model.Room, userId uint) *model.UserLocation {
+func (s *ConnectionStore) FindUserLocationInRoom(room *model.Room, userId string) *model.UserLocation {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -49,13 +50,14 @@ func (s *ConnectionStore) FindUserLocationInRoom(room *model.Room, userId uint) 
 
 	return nil
 }
-func (c *ConnectionStore) GetConnectedUserIdsInRoom(roomId uint) []uint {
+func (c *ConnectionStore) GetConnectedUserIdsInRoom(roomId string) []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	userIds := []uint{}
+	userIds := []string{}
 	for _, userLocation := range c.connections {
 		if userLocation.Room.ID == roomId {
+			log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!userLocationId", userLocation.User.ID)
 			userIds = append(userIds, userLocation.User.ID)
 		}
 	}

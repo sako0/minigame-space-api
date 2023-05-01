@@ -61,7 +61,7 @@ func (uc *RoomUsecase) DisconnectUserLocation(userLocation *model.UserLocation) 
 	}
 }
 
-func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]uint, error) {
+func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]string, error) {
 	userLocations, err := uc.userLocationRepo.GetUserLocationsByRoom(userLocation.Room.ID)
 	if err != nil {
 		log.Printf("Error sending room joined event: %v", err)
@@ -100,10 +100,10 @@ func (uc *RoomUsecase) GetUserByFirebaseUID(firebaseUid string) (*model.User, er
 	return uc.userRepo.GetUserByFirebaseUID(firebaseUid)
 }
 
-func (uc *RoomUsecase) GetArea(areaId uint) (*model.Area, error) {
+func (uc *RoomUsecase) GetArea(areaId string) (*model.Area, error) {
 	return uc.areaRepo.GetArea(areaId)
 }
 
-func (uc *RoomUsecase) GetRoom(roomId uint) (*model.Room, error) {
+func (uc *RoomUsecase) GetRoom(roomId string) (*model.Room, error) {
 	return uc.roomRepo.GetRoom(roomId)
 }

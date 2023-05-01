@@ -14,7 +14,7 @@ func NewUserRepository(db *gorm.DB) repository.UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (repo *UserRepository) GetUser(userId uint) (*model.User, error) {
+func (repo *UserRepository) GetUser(userId string) (*model.User, error) {
 	user := &model.User{}
 	err := repo.db.First(user, userId).Error
 	if err != nil {

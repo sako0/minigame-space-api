@@ -14,7 +14,7 @@ func NewUserLocationRepository(db *gorm.DB) repository.UserLocationRepository {
 	return &UserLocationRepository{db: db}
 }
 
-func (repo *UserLocationRepository) GetUserLocation(userId uint) (*model.UserLocation, error) {
+func (repo *UserLocationRepository) GetUserLocation(userId string) (*model.UserLocation, error) {
 	var userLocation model.UserLocation
 	err := repo.db.Where("user_id = ?", userId).Find(&userLocation).Error
 	if err != nil {
@@ -33,12 +33,12 @@ func (repo *UserLocationRepository) UpdateUserLocation(userLocation *model.UserL
 	return err
 }
 
-func (repo *UserLocationRepository) RemoveUserLocation(userId uint) error {
+func (repo *UserLocationRepository) RemoveUserLocation(userId string) error {
 	err := repo.db.Delete(model.UserLocation{}, "user_id = ?", userId).Error
 	return err
 }
 
-func (repo *UserLocationRepository) GetUserLocationsByRoom(roomId uint) ([]model.UserLocation, error) {
+func (repo *UserLocationRepository) GetUserLocationsByRoom(roomId string) ([]model.UserLocation, error) {
 	var userLocations []model.UserLocation
 	err := repo.db.Where("room_id = ?", roomId).Find(&userLocations).Error
 	if err != nil {

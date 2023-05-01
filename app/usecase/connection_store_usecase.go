@@ -32,7 +32,7 @@ func (cu *ConnectionStoreUsecase) RemoveConnection(user *model.User) {
 	cu.connectionStoreRepo.RemoveConnection(user)
 }
 
-func (cu *ConnectionStoreUsecase) GetConnectionByUserID(userID uint) (*websocket.Conn, bool) {
+func (cu *ConnectionStoreUsecase) GetConnectionByUserID(userID string) (*websocket.Conn, bool) {
 	cu.mutex.Lock()
 	defer cu.mutex.Unlock()
 

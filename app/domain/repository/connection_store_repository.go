@@ -7,7 +7,7 @@ import (
 type ConnectionStoreRepository interface {
 	StoreConnection(userLocation *model.UserLocation)
 	RemoveConnection(user *model.User)
-	GetUserLocationByUserID(userID uint) (*model.UserLocation, bool)
-	FindUserLocationInRoom(room *model.Room, userId uint) *model.UserLocation
-	GetConnectedUserIdsInRoom(roomId uint) []uint
+	GetUserLocationByUserID(userID string) (*model.UserLocation, bool)
+	FindUserLocationInRoom(room *model.Room, userId string) *model.UserLocation
+	GetConnectedUserIdsInRoom(roomId string) []string
 }

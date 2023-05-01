@@ -6,14 +6,15 @@ import (
 
 type Room struct {
 	gorm.Model
-	AreaID        uint
+	ID            string `gorm:"type:varchar(36);primaryKey"`
+	AreaID        string `gorm:"type:varchar(36)"`
 	Area          Area
-	RoomTypeID    uint
+	RoomTypeID    string `gorm:"type:varchar(36)"`
 	RoomType      RoomType
 	Status        int
 	UserLocations []UserLocation
 }
 
-func NewRoom(areaId, roomTypeId uint) *Room {
+func NewRoom(areaId, roomTypeId string) *Room {
 	return &Room{AreaID: areaId, RoomTypeID: roomTypeId, Status: 0}
 }
