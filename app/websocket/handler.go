@@ -111,9 +111,22 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 				h.connectionUsecase.StoreUserLocation(userLocation)
 
 				// Roomにjoinしたことを送信する
-				_, err = h.roomUsecase.SendRoomJoinedEvent(userLocation)
+				connectedUserIds, err := h.roomUsecase.SendRoomJoinedEvent(userLocation)
 				if err != nil {
 					log.Printf("Error sending room joined event: %v", err)
+					h.roomUsecase.DisconnectUserLocation(userLocation)
+					break
+				}
+
+				// 自分自身にもclient-joinedイベントを送信する
+				clientJoinedMsg := map[string]interface{}{
+					"type":             "client-joined",
+					"userId":           userLocation.User.ID,
+					"connectedUserIds": connectedUserIds,
+				}
+
+				if err := userLocation.Conn.WriteJSON(clientJoinedMsg); err != nil {
+					log.Printf("Error sending client-joined event: %v", err)
 					h.roomUsecase.DisconnectUserLocation(userLocation)
 					break
 				}

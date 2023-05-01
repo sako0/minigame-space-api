@@ -68,9 +68,10 @@ func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]
 		uc.DisconnectUserLocation(userLocation)
 		return nil, err
 	}
+
 	// 接続中のユーザーIDを取得する
 	connectedUserIds := uc.storeRepo.GetConnectedUserIdsInRoom(userLocation.Room.ID)
-	log.Println(userLocations)
+
 	for _, ul := range userLocations {
 		// Skip the current user to prevent adding their own ID
 		if ul.User.ID == userLocation.User.ID {
@@ -81,19 +82,6 @@ func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]
 		if _, ok := uc.storeRepo.GetUserLocationByUserID(ul.User.ID); ok {
 			connectedUserIds = append(connectedUserIds, ul.User.ID)
 		}
-	}
-
-	log.Println(connectedUserIds)
-	roomJoinedMsg := map[string]interface{}{
-		"type":             "client-joined",
-		"connectedUserIds": connectedUserIds,
-		"userId":           userLocation.User.ID,
-	}
-
-	err = userLocation.Conn.WriteJSON(roomJoinedMsg)
-	if err != nil {
-		log.Printf("Error sending client-joined event to client: %v", err)
-		uc.DisconnectUserLocation(userLocation)
 	}
 
 	return connectedUserIds, nil
