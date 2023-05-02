@@ -22,7 +22,7 @@
                 },
                 {
                     "name": "MYSQL_TEST_DATABASE",
-                    "valueFrom": "minigame_test"
+                    "valueFrom": "MYSQL_TEST_DATABASE"
                 },
                 {
                     "name": "MYSQL_HOST",
