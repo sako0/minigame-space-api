@@ -7,6 +7,32 @@
         {
             "name": "api",
             "image": "282706015608.dkr.ecr.ap-northeast-1.amazonaws.com/webrtc-voice:latest",
+            "secrets": [
+                {
+                    "name": "MYSQL_USER",
+                    "valueFrom": "MYSQL_USER"
+                },
+                {
+                    "name": "MYSQL_PASSWORD",
+                    "valueFrom": "MYSQL_PASSWORD"
+                },
+                {
+                    "name": "MYSQL_DATABASE",
+                    "valueFrom": "MYSQL_DATABASE"
+                },
+                {
+                    "name": "MYSQL_TEST_DATABASE",
+                    "valueFrom": "minigame_test"
+                },
+                {
+                    "name": "MYSQL_HOST",
+                    "valueFrom": "MYSQL_HOST"
+                },
+                {
+                    "name": "MYSQL_PORT",
+                    "valueFrom": "MYSQL_PORT"
+                }
+            ],
             "cpu": 256,
             "memory": 512,
             "memoryReservation": 512,
@@ -36,32 +62,6 @@
         "cpuArchitecture": "X86_64",
         "operatingSystemFamily": "LINUX"
     },
-    "secrets": [
-        {
-            "name": "MYSQL_USER",
-            "valueFrom": "MYSQL_USER"
-        },
-        {
-            "name": "MYSQL_PASSWORD",
-            "valueFrom": "MYSQL_PASSWORD"
-        },
-        {
-            "name": "MYSQL_DATABASE",
-            "valueFrom": "MYSQL_DATABASE"
-        },
-        {
-            "name": "MYSQL_TEST_DATABASE",
-            "valueFrom": "minigame_test"
-        },
-        {
-            "name": "MYSQL_HOST",
-            "valueFrom": "MYSQL_HOST"
-        },
-        {
-            "name": "MYSQL_PORT",
-            "valueFrom": "MYSQL_PORT"
-        }
-    ],
     "cpu": "256",
     "memory": "512"
 }
