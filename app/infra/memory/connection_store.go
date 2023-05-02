@@ -2,7 +2,6 @@
 package infra
 
 import (
-	"log"
 	"sync"
 
 	"github.com/sako0/minigame-space-api/app/domain/model"
@@ -57,7 +56,6 @@ func (c *ConnectionStore) GetConnectedUserIdsInRoom(roomId string) []string {
 	userIds := []string{}
 	for _, userLocation := range c.connections {
 		if userLocation.Room.ID == roomId {
-			log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!userLocationId", userLocation.User.ID)
 			userIds = append(userIds, userLocation.User.ID)
 		}
 	}
