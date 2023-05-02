@@ -1,7 +1,7 @@
+// app/usecase/room_usecase.go
 package usecase
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/gorilla/websocket"
@@ -10,102 +10,100 @@ import (
 )
 
 type RoomUsecase struct {
-	roomRepo repository.RoomRepository
+	roomRepo         repository.RoomRepository
+	areaRepo         repository.AreaRepository
+	userRepo         repository.UserRepository
+	userLocationRepo repository.UserLocationRepository
+	storeRepo        repository.ConnectionStoreRepository
 }
 
-func NewRoomUsecase(roomRepo repository.RoomRepository) *RoomUsecase {
-	return &RoomUsecase{roomRepo: roomRepo}
+func NewRoomUsecase(roomRepo repository.RoomRepository, areaRepo repository.AreaRepository, userRepo repository.UserRepository, userLocationRepo repository.UserLocationRepository, storeRepo repository.ConnectionStoreRepository) *RoomUsecase {
+	return &RoomUsecase{roomRepo: roomRepo, areaRepo: areaRepo, userRepo: userRepo, userLocationRepo: userLocationRepo, storeRepo: storeRepo}
 }
 
-func (uc *RoomUsecase) ConnectClient(roomId string, userId string, conn *websocket.Conn) (*model.Client, error) {
-
-	client := model.NewClient(conn, roomId, userId)
-
-	room, ok := uc.roomRepo.GetRoom(roomId)
-	if !ok {
-		room = model.NewRoom()
-		uc.roomRepo.AddRoom(roomId, room)
-	}
-	// 既に同じクライアントが接続している場合は何もしない
-	for otherClient := range room.Clients {
-		if otherClient.RoomId() == roomId && otherClient.UserId() == userId {
-			return nil, nil
+func (uc *RoomUsecase) ConnectUserLocation(userLocation *model.UserLocation) (*model.UserLocation, error) {
+	// 既に同じUserLocationが接続している場合は何もしない
+	for _, otherUserLocation := range userLocation.Room.UserLocations {
+		if otherUserLocation.RoomID == userLocation.Room.ID && otherUserLocation.UserID == userLocation.User.ID {
+			return userLocation, nil
 		}
 	}
-	room.Clients[client] = true
-
-	return client, nil
+	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
+	if err != nil {
+		return nil, err
+	}
+	if userLocation.Conn != nil {
+		uc.storeRepo.StoreConnection(userLocation)
+	}
+	return userLocation, nil
 }
 
-func (uc *RoomUsecase) DisconnectClient(roomId string, client *model.Client) {
-	room, ok := uc.roomRepo.GetRoom(roomId)
-	if ok {
-		delete(room.Clients, client)
-		if len(room.Clients) == 0 {
-			uc.roomRepo.RemoveRoom(roomId)
+func (uc *RoomUsecase) DisconnectUserLocation(userLocation *model.UserLocation) {
+	room, err := uc.roomRepo.GetRoom(userLocation.RoomID)
+	if err == nil {
+		index := -1
+		for i, ul := range room.UserLocations {
+			if ul.ID == userLocation.ID {
+				index = i
+				break
+			}
 		}
-	}
-	if client.Conn() != nil {
-		client.Conn().Close()
-	}
-}
-func (uc *RoomUsecase) BroadcastMessageToOtherClients(client *model.Client, msg *model.Message) error {
-	roomId := client.RoomId()
-	room, ok := uc.roomRepo.GetRoom(roomId)
-	if !ok {
-		return fmt.Errorf("Room not found: %s", roomId)
-	}
-
-	msgPayload := msg.Payload
-	msgPayload["userId"] = client.UserId()
-
-	for otherClient := range room.Clients {
-		if otherClient != client {
-			err := otherClient.Conn().WriteJSON(msgPayload)
-			if err != nil {
-				log.Printf("Error writing JSON: %v", err)
-				uc.DisconnectClient(roomId, otherClient)
+		if index != -1 {
+			room.UserLocations = append(room.UserLocations[:index], room.UserLocations[index+1:]...)
+			if len(room.UserLocations) == 0 {
+				uc.roomRepo.RemoveRoom(userLocation.RoomID)
 			}
 		}
 	}
-
-	return nil
+	if userLocation.Conn != nil {
+		uc.storeRepo.RemoveConnection(&userLocation.User) // Changed this line to use the connection store use case
+		userLocation.Conn.Close()
+	}
 }
 
-func (uc *RoomUsecase) SendRoomJoinedEvent(client *model.Client) ([]string, error) {
-	roomId := client.RoomId()
-
-	room, ok := uc.roomRepo.GetRoom(roomId)
-	if !ok {
-		return nil, fmt.Errorf("Room not found: %s", roomId)
+func (uc *RoomUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]string, error) {
+	userLocations, err := uc.userLocationRepo.GetUserLocationsByRoom(userLocation.Room.ID)
+	if err != nil {
+		log.Printf("Error sending room joined event: %v", err)
+		uc.DisconnectUserLocation(userLocation)
+		return nil, err
 	}
-	connectedUserIds := []string{}
-	for otherClient := range room.Clients {
-		if otherClient != client {
-			connectedUserIds = append(connectedUserIds, otherClient.UserId())
+
+	// 接続中のユーザーIDを取得する
+	connectedUserIds := uc.storeRepo.GetConnectedUserIdsInRoom(userLocation.Room.ID)
+
+	for _, ul := range userLocations {
+		// Skip the current user to prevent adding their own ID
+		if ul.User.ID == userLocation.User.ID {
+			continue
+		}
+
+		// Check if the user has an active connection
+		if _, ok := uc.storeRepo.GetUserLocationByUserID(ul.User.ID); ok {
+			connectedUserIds = append(connectedUserIds, ul.User.ID)
 		}
 	}
 
 	return connectedUserIds, nil
 }
 
-func (uc *RoomUsecase) SendMessageToOtherClients(client *model.Client, toUserId string, msg *model.Message) {
-	room, ok := uc.roomRepo.GetRoom(client.RoomId())
-	if !ok {
-		log.Printf("Room not found: %s", client.RoomId())
-		return
-	}
+func (uc *RoomUsecase) HandleSignalMessage(userLocation *model.UserLocation, toUserConn *websocket.Conn, msg map[string]interface{}) {
 
-	msgPayload := msg.Payload
-	msgPayload["userId"] = client.UserId()
-
-	for otherClient := range room.Clients {
-		if otherClient.UserId() == toUserId {
-			err := otherClient.Conn().WriteJSON(msgPayload)
-			if err != nil {
-				log.Printf("Error sending message to client: %v", err)
-				uc.DisconnectClient(client.RoomId(), otherClient)
-			}
-		}
+	err := toUserConn.WriteJSON(msg)
+	if err != nil {
+		log.Printf("Error sending signal message to target user: %v", err)
+		uc.DisconnectUserLocation(userLocation)
 	}
+}
+
+func (uc *RoomUsecase) GetUserByFirebaseUID(firebaseUid string) (*model.User, error) {
+	return uc.userRepo.GetUserByFirebaseUID(firebaseUid)
+}
+
+func (uc *RoomUsecase) GetArea(areaId string) (*model.Area, error) {
+	return uc.areaRepo.GetArea(areaId)
+}
+
+func (uc *RoomUsecase) GetRoom(roomId string) (*model.Room, error) {
+	return uc.roomRepo.GetRoom(roomId)
 }
