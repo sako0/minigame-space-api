@@ -6,7 +6,6 @@ import (
 
 type Area struct {
 	gorm.Model
-	ID             string `gorm:"type:varchar(36);primaryKey"`
 	Name           string
 	MaxParticipant int
 	RoomCount      int

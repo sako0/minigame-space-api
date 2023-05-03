@@ -28,125 +28,135 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Fatal(err)
 	}
+	if conn == nil {
+		log.Printf("conn is nil")
+		return
+	}
 
 	defer conn.Close()
 
-	var user *model.User
-	var userLocation *model.UserLocation
+	userLocation := &model.UserLocation{}
 
-	// Handle incoming messages
 	for {
+		if userLocation.ID == 0 {
+			log.Printf("Warning: userLocation is nil")
+		}
 		var msg = map[string]interface{}{}
 
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
-			if userLocation != nil {
+			if userLocation.ID == 0 {
 				h.roomUsecase.DisconnectUserLocation(userLocation)
 			}
-			break
+			return
 		}
 
-		if user == nil {
-			firebaseUid, ok := msg["userId"].(string)
-			if !ok {
-				log.Printf("userId is missing")
-				return
-			}
-
-			user, err = h.roomUsecase.GetUserByFirebaseUID(firebaseUid)
-			if err != nil {
-				log.Printf("Error getting user: %v", err)
-				return
-			}
+		firebaseUid, ok := msg["fromFirebaseUid"].(string)
+		if !ok {
+			log.Printf("firebaseUid is missing")
+			return
 		}
+
+		user, err := h.roomUsecase.GetUserByFirebaseUID(firebaseUid)
+		if err != nil {
+			log.Printf("Error getting user: %v", err)
+			return
+		}
+		log.Printf("Retrieved user ID: %d", user.ID)
 
 		log.Printf("msg: %v", msg)
 
 		if val, ok := msg["type"]; ok {
 			switch val.(string) {
 			case "join-room":
-				roomId, ok := msg["roomId"].(string)
+				if userLocation.ID != 0 {
+					log.Printf("Warning: join-room userLocation is not nil")
+				}
+				roomIdFloat, ok := msg["roomId"].(float64)
 				if !ok {
-					log.Printf("roomId is missing")
-					return
+					log.Printf("roomIdFloat cast error")
 				}
-				if err != nil {
-					log.Printf("Invalid roomId: %v", err)
-					return
-				}
+				roomId := uint(int(roomIdFloat))
+				log.Printf("roomId: %d", roomId)
 
 				room, err := h.roomUsecase.GetRoom(roomId)
 				if err != nil {
 					log.Printf("Error getting room: %v", err)
-					return
 				}
-
-				area, err := h.roomUsecase.GetArea(room.AreaID)
+				area, err := h.roomUsecase.GetArea(room.Area.ID)
 				if err != nil {
 					log.Printf("Error getting area: %v", err)
-					return
 				}
 
-				// ユーザーの接続情報を作成し、userLocationに代入する
 				userLocation = &model.UserLocation{
-					User: *user,
-					Area: *area,
-					Room: *room,
+					Area: area,
+					Room: room,
+					User: user,
 					Conn: conn,
 				}
 
-				// userLocationを接続する
+				userLocation, err := h.roomUsecase.GetUserLocationByUserID(user.ID)
+				if err != nil {
+					log.Printf("Error checking user location existence: %v", err)
+					return
+				}
+
+				if userLocation.ID == 0 {
+					log.Println("handlerユーザーロケーションIDがない")
+					return
+				}
+				// ユーザーの接続情報を作成し、userLocationに代入する
 				userLocation, err = h.roomUsecase.ConnectUserLocation(userLocation)
 				if err != nil {
 					log.Printf("Error connecting user location: %v", err)
 					return
 				}
-
-				// 接続情報にconnを設定する
+				// // 接続情報にconnを設定する
 				userLocation.Conn = conn
-				// ConnectionStoreに接続を保存する
-				h.connectionUsecase.StoreUserLocation(userLocation)
 
 				// Roomにjoinしたことを送信する
 				connectedUserIds, err := h.roomUsecase.SendRoomJoinedEvent(userLocation)
 				if err != nil {
 					log.Printf("Error sending room joined event: %v", err)
 					h.roomUsecase.DisconnectUserLocation(userLocation)
-					break
+					return
 				}
 
 				// 自分自身にもclient-joinedイベントを送信する
 				clientJoinedMsg := map[string]interface{}{
 					"type":             "client-joined",
-					"userId":           userLocation.User.ID,
+					"fromFirebaseUid":  user.FirebaseUID,
 					"connectedUserIds": connectedUserIds,
 				}
 
 				if err := userLocation.Conn.WriteJSON(clientJoinedMsg); err != nil {
 					log.Printf("Error sending client-joined event: %v", err)
 					h.roomUsecase.DisconnectUserLocation(userLocation)
-					break
+					return
 				}
 
 			case "leave-room":
-				h.connectionUsecase.RemoveConnection(user)
+				h.connectionUsecase.RemoveConnection(userLocation)
 				h.roomUsecase.DisconnectUserLocation(userLocation)
 
 			case "offer", "answer", "ice-candidate":
-				toUserId := string(msg["toUserId"].(string))
-				log.Printf("toUserId: %v", toUserId)
-				targetConn, ok := h.connectionUsecase.GetConnectionByUserID(toUserId)
+				toFirebaseUid := msg["toFirebaseUid"].(string)
+				fromFirebaseUid := msg["fromFirebaseUid"].(string)
+				if toFirebaseUid == fromFirebaseUid {
+					log.Printf("Warning: toFirebaseUid is same as fromFirebaseUid")
+					return
+				}
+				log.Printf("msg: %v", msg)
+				log.Printf("toFirebaseUid: %v", toFirebaseUid)
+				toTargetConn, ok := h.connectionUsecase.GetConnectionByUserFirebaseUID(toFirebaseUid)
 				if !ok {
 					log.Printf("Info getting target connection: %v", err)
 					return
 				}
-				if targetConn != nil {
-					log.Println(targetConn)
-					// Process offer, answer, ice-candidate events
-					log.Printf("ユーザーID:[ %s ]から [ %s ] に送られました。メッセージタイプは[ %v ]です。", userLocation.User.ID, toUserId, msg["type"])
-
-					h.roomUsecase.HandleSignalMessage(userLocation, targetConn, msg)
+				if toTargetConn != nil {
+					log.Printf("ユーザーID:[ %s ]から [ %v ] に送られました。メッセージタイプは[ %v ]です。", userLocation.User.FirebaseUID, toFirebaseUid, msg["type"])
+					h.roomUsecase.HandleSignalMessage(userLocation, toTargetConn, msg)
 				}
 			}
 		}

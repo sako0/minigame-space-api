@@ -40,7 +40,7 @@ func main() {
 	userLocationRepo := infra.NewUserLocationRepository(db)
 	storeRepo := memory.NewConnectionStore()
 	roomUsecase := usecase.NewRoomUsecase(roomRepo, areaRepo, userRepo, userLocationRepo, storeRepo)
-	connectionUsecase := usecase.NewConnectionStoreUsecase(storeRepo)
+	connectionUsecase := usecase.NewConnectionStoreUsecase(storeRepo, userLocationRepo, userRepo)
 	wsHandler := handler.NewWebSocketHandler(*roomUsecase, *connectionUsecase, upgrader)
 
 	e := echo.New()

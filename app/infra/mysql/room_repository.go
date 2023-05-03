@@ -14,9 +14,9 @@ func NewRoomRepository(db *gorm.DB) repository.RoomRepository {
 	return &RoomRepository{db: db}
 }
 
-func (repo *RoomRepository) GetRoom(roomId string) (*model.Room, error) {
+func (repo *RoomRepository) GetRoom(roomId uint) (*model.Room, error) {
 	var room model.Room
-	err := repo.db.Where("id = ?", roomId).Preload("UserLocations").Find(&room).Error
+	err := repo.db.Where("id = ?", roomId).Preload("UserLocations").Preload("Area").Find(&room).Error
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (repo *RoomRepository) AddRoom(room *model.Room) error {
 	return err
 }
 
-func (repo *RoomRepository) RemoveRoom(roomId string) error {
+func (repo *RoomRepository) RemoveRoom(roomId uint) error {
 	err := repo.db.Delete(model.Room{}, "id = ?", roomId).Error
 	return err
 }
