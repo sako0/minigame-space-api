@@ -6,10 +6,9 @@ import (
 
 type User struct {
 	gorm.Model
-	ID          string `gorm:"type:varchar(36);primaryKey"`
 	FirebaseUID string `gorm:"type:varchar(255);uniqueIndex"`
 	Username    string
-	AvatarID    string `gorm:"type:varchar(36)"`
+	AvatarID    uint
 }
 
 func NewUser(firebaseUID string) *User {
