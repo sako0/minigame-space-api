@@ -34,26 +34,37 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			log.Printf("Error reading JSON: %v", err)
 			h.roomUsecase.DisconnectClient(client.RoomId(), client)
+			// 全てのクライアントに leave-room イベントをブロードキャスト
+			leaveRoomMsg := map[string]interface{}{
+				"type":            "leave-room",
+				"fromFirebaseUid": client.UserId(),
+			}
+
+			err = h.roomUsecase.BroadcastMessageToOtherClients(client, &model.Message{Payload: leaveRoomMsg})
+			if err != nil {
+				log.Printf("Error broadcasting leave-room event: %v", err)
+			}
 			break
 		}
 
 		roomIdFloat, ok := msg["roomId"].(float64)
 		if !ok {
 			log.Printf("roomIdFloat cast error")
+			return
 		}
 		roomId := uint(int(roomIdFloat))
 		if !ok {
 			log.Printf("roomId is missing")
 			return
 		}
-		userId, ok := msg["fromFirebaseUid"].(string)
+		fromFirebaseUid, ok := msg["fromFirebaseUid"].(string)
 		if !ok {
 			log.Printf("fromFirebaseUid is missing")
 			return
 		}
-		client = model.NewClient(conn, roomId, userId)
+		client = model.NewClient(conn, roomId, fromFirebaseUid)
 
-		h.roomUsecase.ConnectClient(roomId, userId, conn)
+		h.roomUsecase.ConnectClient(roomId, fromFirebaseUid, conn)
 
 		log.Printf("Received message: %v", msg)
 		if val, ok := msg["type"]; ok {
@@ -65,13 +76,11 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 					h.roomUsecase.DisconnectClient(client.RoomId(), client)
 					break
 				}
-
 				roomJoinedMsg := map[string]interface{}{
 					"type":             "client-joined",
 					"connectedUserIds": connectedUserIds,
 					"userId":           client.UserId(),
 				}
-
 				err = client.Conn().WriteJSON(roomJoinedMsg)
 				if err != nil {
 					log.Printf("Error sending client-joined event to client: %v", err)
@@ -92,15 +101,16 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 				}
 
 			case "offer", "answer", "ice-candidate":
-				toUserId, ok := msg["toFirebaseUid"].(string)
+				toFirebaseUid, ok := msg["toFirebaseUid"].(string)
 				if !ok {
 					log.Printf("toFirebaseUid is missing")
 					return
 				}
 				// 送信先が自分自身でなければメッセージを送信する
-				if toUserId != client.UserId() {
+				if toFirebaseUid != client.UserId() {
+					// 来たメッセージをそのまま送信する
 					msgPayload := &model.Message{Payload: msg}
-					h.roomUsecase.SendMessageToOtherClients(client, toUserId, msgPayload)
+					h.roomUsecase.SendMessageToOtherClients(client, toFirebaseUid, msgPayload)
 				}
 			}
 		}
