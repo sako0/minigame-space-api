@@ -1,67 +1,64 @@
 package usecase
 
 import (
-	"fmt"
 	"log"
 
-	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
 	"github.com/sako0/minigame-space-api/app/domain/repository"
 )
 
 type RoomUsecase struct {
-	roomRepo repository.RoomRepository
+	roomRepo   repository.RoomRepository
+	clientRepo repository.ClientRepository
 }
 
-func NewRoomUsecase(roomRepo repository.RoomRepository) *RoomUsecase {
-	return &RoomUsecase{roomRepo: roomRepo}
+func NewRoomUsecase(roomRepo repository.RoomRepository, clientRepo repository.ClientRepository) *RoomUsecase {
+	return &RoomUsecase{roomRepo: roomRepo, clientRepo: clientRepo}
 }
 
-func (uc *RoomUsecase) ConnectClient(roomId uint, userId string, conn *websocket.Conn) (*model.Client, error) {
-
-	client := model.NewClient(conn, roomId, userId)
-
-	room, ok := uc.roomRepo.GetRoom(roomId)
+func (uc *RoomUsecase) ConnectClient(client model.Client) (*model.Client, error) {
+	room, ok := uc.roomRepo.GetRoom(client.RoomId)
 	if !ok {
-		room = model.NewRoom()
-		uc.roomRepo.AddRoom(roomId, room)
+		// ルームが存在しない場合は新規作成
+		room = model.NewRoom(client.RoomId)
+		uc.roomRepo.AddRoom(client.RoomId, room)
 	}
+	log.Printf("room: %+v", room)
+
 	// 既に同じクライアントが接続している場合は何もしない
-	for otherClient := range room.Clients {
-		if otherClient.RoomId() == roomId && otherClient.UserId() == userId {
-			return nil, nil
+	for _, otherClient := range uc.clientRepo.GetAllClientsByRoomId(room.ID) {
+		if otherClient.RoomId == room.ID && otherClient.UserId == client.UserId {
+			return &client, nil
 		}
 	}
-	room.Clients[client] = true
 
-	return client, nil
+	uc.clientRepo.AddClient(&client)
+
+	return &client, nil
 }
 
 func (uc *RoomUsecase) DisconnectClient(roomId uint, client *model.Client) {
-	room, ok := uc.roomRepo.GetRoom(roomId)
+	_, ok := uc.roomRepo.GetRoom(roomId)
 	if ok {
-		delete(room.Clients, client)
-		if len(room.Clients) == 0 {
+		uc.clientRepo.RemoveClient(client.UserId)
+		if len(uc.clientRepo.GetAllClientsByRoomId(roomId)) == 0 {
 			uc.roomRepo.RemoveRoom(roomId)
 		}
 	}
-	if client.Conn() != nil {
-		client.Conn().Close()
+	if client.Conn != nil {
+		client.Conn.Close()
 	}
 }
+
 func (uc *RoomUsecase) BroadcastMessageToOtherClients(client *model.Client, msg *model.Message) error {
-	roomId := client.RoomId()
-	room, ok := uc.roomRepo.GetRoom(roomId)
-	if !ok {
-		return fmt.Errorf("room not found: %d", roomId)
-	}
+	roomId := client.RoomId
 
 	msgPayload := msg.Payload
-	msgPayload["userId"] = client.UserId()
+	msgPayload["fromFirebaseUid"] = client.UserId
 
-	for otherClient := range room.Clients {
+	for _, otherClient := range uc.clientRepo.GetAllClientsByRoomId(roomId) {
 		if otherClient != client {
-			err := otherClient.Conn().WriteJSON(msgPayload)
+			err := otherClient.Conn.WriteJSON(msgPayload)
 			if err != nil {
 				log.Printf("Error writing JSON: %v", err)
 				uc.DisconnectClient(roomId, otherClient)
@@ -73,16 +70,11 @@ func (uc *RoomUsecase) BroadcastMessageToOtherClients(client *model.Client, msg 
 }
 
 func (uc *RoomUsecase) SendRoomJoinedEvent(client *model.Client) ([]string, error) {
-	roomId := client.RoomId()
-
-	room, ok := uc.roomRepo.GetRoom(roomId)
-	if !ok {
-		return nil, fmt.Errorf("room not found: %d", roomId)
-	}
+	roomId := client.RoomId
 	connectedUserIds := []string{}
-	for otherClient := range room.Clients {
+	for _, otherClient := range uc.clientRepo.GetAllClientsByRoomId(roomId) {
 		if otherClient != client {
-			connectedUserIds = append(connectedUserIds, otherClient.UserId())
+			connectedUserIds = append(connectedUserIds, otherClient.UserId)
 		}
 	}
 
@@ -90,22 +82,26 @@ func (uc *RoomUsecase) SendRoomJoinedEvent(client *model.Client) ([]string, erro
 }
 
 func (uc *RoomUsecase) SendMessageToOtherClients(client *model.Client, toUserId string, msg *model.Message) {
-	room, ok := uc.roomRepo.GetRoom(client.RoomId())
+	room, ok := uc.roomRepo.GetRoom(client.RoomId)
 	if !ok {
-		log.Printf("Room not found: %d", client.RoomId())
+		log.Printf("Room not found: %d", client.RoomId)
 		return
 	}
 
 	msgPayload := msg.Payload
-	msgPayload["fromFirebaseUid"] = client.UserId()
+	msgPayload["fromFirebaseUid"] = client.UserId
 
-	for otherClient := range room.Clients {
-		if otherClient.UserId() == toUserId {
-			err := otherClient.Conn().WriteJSON(msgPayload)
+	for _, otherClient := range uc.clientRepo.GetAllClientsByRoomId(room.ID) {
+		if otherClient.UserId == toUserId {
+			err := otherClient.Conn.WriteJSON(msgPayload)
 			if err != nil {
 				log.Printf("Error sending message to client: %v", err)
-				uc.DisconnectClient(client.RoomId(), otherClient)
+				uc.DisconnectClient(client.RoomId, otherClient)
 			}
 		}
 	}
+}
+
+func (uc *RoomUsecase) GetRoom(roomId uint) (*model.Room, bool) {
+	return uc.roomRepo.GetRoom(roomId)
 }

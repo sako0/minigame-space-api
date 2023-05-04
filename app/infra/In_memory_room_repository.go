@@ -10,15 +10,23 @@ func NewInMemoryRoomRepository() *InMemoryRoomRepository {
 	return &InMemoryRoomRepository{rooms: make(map[uint]*model.Room)}
 }
 
-func (repo *InMemoryRoomRepository) GetRoom(roomId uint) (*model.Room, bool) {
-	room, ok := repo.rooms[roomId]
+func (r *InMemoryRoomRepository) GetRoom(roomId uint) (*model.Room, bool) {
+	room, ok := r.rooms[roomId]
 	return room, ok
 }
 
-func (repo *InMemoryRoomRepository) AddRoom(roomId uint, room *model.Room) {
-	repo.rooms[roomId] = room
+func (r *InMemoryRoomRepository) AddRoom(roomId uint, room *model.Room) {
+	r.rooms[roomId] = room
 }
 
-func (repo *InMemoryRoomRepository) RemoveRoom(roomId uint) {
-	delete(repo.rooms, roomId)
+func (r *InMemoryRoomRepository) RemoveRoom(roomId uint) {
+	delete(r.rooms, roomId)
+}
+
+func (r *InMemoryRoomRepository) GetAllRooms() []*model.Room {
+	rooms := make([]*model.Room, 0, len(r.rooms))
+	for _, room := range r.rooms {
+		rooms = append(rooms, room)
+	}
+	return rooms
 }
