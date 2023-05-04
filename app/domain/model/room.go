@@ -1,9 +1,10 @@
 package model
 
 type Room struct {
-	Clients map[*Client]bool
+	ID      uint
+	Clients []Client
 }
 
-func NewRoom() *Room {
-	return &Room{Clients: make(map[*Client]bool)}
+func NewRoom(id uint) *Room {
+	return &Room{ID: id}
 }

@@ -21,7 +21,8 @@ func main() {
 	}
 
 	roomRepo := infra.NewInMemoryRoomRepository()
-	roomUsecase := usecase.NewRoomUsecase(roomRepo)
+	clientRepo := infra.NewInMemoryClientRepository()
+	roomUsecase := usecase.NewRoomUsecase(roomRepo, clientRepo)
 	wsHandler := handler.NewWebSocketHandler(*roomUsecase, upgrader)
 
 	e := echo.New()
