@@ -18,7 +18,7 @@ func NewUserLocationRepository(db *gorm.DB) repository.UserLocationRepository {
 
 func (r *UserLocationRepository) GetUserLocation(userId uint) (*model.UserLocation, bool, error) {
 	userLocation := &model.UserLocation{}
-	result := r.db.First(userLocation, userId)
+	result := r.db.First(userLocation, fmt.Sprintf("user_id = %d", userId))
 
 	if result.Error == gorm.ErrRecordNotFound {
 		return nil, false, nil

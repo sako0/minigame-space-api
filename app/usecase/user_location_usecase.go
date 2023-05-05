@@ -22,6 +22,21 @@ func (uc *UserLocationUsecase) ConnectUserLocation(userLocation *model.UserLocat
 	if userLocation.RoomID == 0 {
 		return fmt.Errorf("userLocation.RoomID is nil")
 	}
+
+	// UserLocationが存在しない場合は新規作成
+	_, isExist, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	if err != nil {
+		return err
+	}
+
+	if !isExist {
+		log.Println("userLocation is not exist")
+		err := uc.userLocationRepo.AddUserLocation(userLocation)
+		if err != nil {
+			return err
+		}
+	}
+
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 
 	for _, otherUserLocation := range connectedUserLocations {
@@ -29,7 +44,7 @@ func (uc *UserLocationUsecase) ConnectUserLocation(userLocation *model.UserLocat
 			return nil
 		}
 	}
-	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
+	err = uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
 		return err
 	}
@@ -69,6 +84,7 @@ func (uc *UserLocationUsecase) BroadcastMessage(userLocation *model.UserLocation
 }
 
 func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) error {
+
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 
 	connectedUserIds := []uint{}
