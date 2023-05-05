@@ -18,24 +18,25 @@ func NewUserLocationUsecase(userLocationRepo repository.UserLocationRepository, 
 	return &UserLocationUsecase{userLocationRepo: userLocationRepo, inMemoryUserLocationRepo: inMemoryUserLocationRepo}
 }
 
-func (uc *UserLocationUsecase) ConnectUserLocation(userLocation *model.UserLocation) (*model.UserLocation, error) {
+func (uc *UserLocationUsecase) ConnectUserLocation(userLocation *model.UserLocation) error {
 	if userLocation.RoomID == 0 {
-		return nil, fmt.Errorf("userLocation.RoomID is nil")
+		return fmt.Errorf("userLocation.RoomID is nil")
 	}
+	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 
-	for _, otherUserLocation := range userLocation.Room.UserLocations {
+	for _, otherUserLocation := range connectedUserLocations {
 		if otherUserLocation.RoomID == userLocation.RoomID && otherUserLocation.UserID == userLocation.UserID {
-			return userLocation, nil
+			return nil
 		}
 	}
 	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
+	log.Println("userLocation: ", userLocation)
 	uc.inMemoryUserLocationRepo.Store(userLocation)
 
-	return userLocation, nil
+	return nil
 }
 
 func (uc *UserLocationUsecase) DisconnectUserLocation(userLocation *model.UserLocation) error {
@@ -50,10 +51,11 @@ func (uc *UserLocationUsecase) DisconnectUserLocation(userLocation *model.UserLo
 }
 
 func (uc *UserLocationUsecase) BroadcastMessage(userLocation *model.UserLocation, msgPayload map[string]interface{}) error {
-	connectedUserIds := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
-	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
+	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 
-	for _, otherClient := range connectedUserIds {
+	log.Printf("Initial connectedUserLocations: %v", connectedUserLocations)
+
+	for _, otherClient := range connectedUserLocations {
 		if otherClient.UserID != userLocation.UserID {
 			err := otherClient.Conn.WriteJSON(msgPayload)
 			if err != nil {
@@ -66,15 +68,22 @@ func (uc *UserLocationUsecase) BroadcastMessage(userLocation *model.UserLocation
 	return nil
 }
 
-func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]*model.UserLocation, error) {
-	connectedUserIds := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
+func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) error {
+	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
+
+	connectedUserIds := []uint{}
+	for _, otherUserLocation := range connectedUserLocations {
+		if otherUserLocation.UserID == userLocation.UserID {
+			connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
+		}
+	}
 	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
 	roomJoinedMsg := map[string]interface{}{
 		"type":             "client-joined",
 		"connectedUserIds": connectedUserIds,
 		"fromUserID":       userLocation.UserID,
 	}
-	return connectedUserIds, uc.BroadcastMessage(userLocation, roomJoinedMsg)
+	return uc.BroadcastMessage(userLocation, roomJoinedMsg)
 }
 
 func (uc *UserLocationUsecase) SendMessageToOtherClients(userLocation *model.UserLocation, msg *model.Message) error {

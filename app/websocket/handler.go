@@ -28,6 +28,7 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	defer conn.Close()
 
 	userLocation := model.NewUserLocationByConn(conn)
+	userLocation.AreaID = 1 // TODO: 仮
 
 	for {
 		msg, err := h.readMessage(conn)
@@ -82,28 +83,18 @@ func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg 
 	}
 	userLocation.UserID = fromUserID
 
-	userLocationPT, err := h.userLocationUsecase.ConnectUserLocation(userLocation)
+	err := h.userLocationUsecase.ConnectUserLocation(userLocation)
 	if err != nil {
 		log.Printf("Error connecting client to room: %v", err)
 		return err
 	}
-	userLocation = userLocationPT
-	connectedUserIds, err := h.userLocationUsecase.SendRoomJoinedEvent(userLocation)
+	err = h.userLocationUsecase.SendRoomJoinedEvent(userLocation)
 	if err != nil {
 		log.Printf("Error sending room joined event: %v", err)
 		h.userLocationUsecase.DisconnectUserLocation(userLocation)
 		return err
 	}
-	roomJoinedMsg := map[string]interface{}{
-		"type":             "client-joined",
-		"connectedUserIds": connectedUserIds,
-		"fromUserID":       userLocation.UserID,
-	}
-	err = userLocation.Conn.WriteJSON(roomJoinedMsg)
-	if err != nil {
-		log.Printf("Error sending client-joined event to client: %v", err)
-		h.disconnectClient(userLocation)
-	}
+
 	return nil
 }
 

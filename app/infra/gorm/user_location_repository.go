@@ -48,7 +48,7 @@ func (r *UserLocationRepository) RemoveUserLocation(userId uint) error {
 }
 
 func (r *UserLocationRepository) UpdateUserLocation(userLocation *model.UserLocation) error {
-	result := r.db.Save(userLocation)
+	result := r.db.Where("user_id = ?", userLocation.UserID).Updates(userLocation)
 	if result.Error != nil {
 		return fmt.Errorf("UpdateUserLocation: %v", result.Error)
 	}
