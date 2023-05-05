@@ -6,7 +6,11 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
-	"github.com/sako0/minigame-space-api/app/infra"
+	"github.com/sako0/minigame-space-api/app/config"
+	"github.com/sako0/minigame-space-api/app/database"
+	"github.com/sako0/minigame-space-api/app/infra/gorm"
+	"github.com/sako0/minigame-space-api/app/infra/in_memory"
+
 	"github.com/sako0/minigame-space-api/app/usecase"
 	handler "github.com/sako0/minigame-space-api/app/websocket"
 )
@@ -19,10 +23,20 @@ func main() {
 			return true
 		},
 	}
+	// 設定読み込み
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		panic(err)
+	}
+	// データベース接続
+	db, err := database.NewSQLConnection(cfg.AppInfo.DatabaseURL)
+	if err != nil {
+		panic(err)
+	}
 
-	roomRepo := infra.NewInMemoryRoomRepository()
-	clientRepo := infra.NewInMemoryClientRepository()
-	roomUsecase := usecase.NewRoomUsecase(roomRepo, clientRepo)
+	userLocationRepo := gorm.NewUserLocationRepository(db)
+	inMemoryUserLocationRepo := in_memory.NewInMemoryUserLocationRepository()
+	roomUsecase := usecase.NewUserLocationUsecase(userLocationRepo, inMemoryUserLocationRepo)
 	wsHandler := handler.NewWebSocketHandler(*roomUsecase, upgrader)
 
 	e := echo.New()
@@ -37,7 +51,7 @@ func main() {
 	})
 
 	log.Println("Starting server on :5500")
-	err := e.Start(":5500")
+	err = e.Start(":5500")
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

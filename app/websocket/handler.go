@@ -11,12 +11,12 @@ import (
 )
 
 type WebSocketHandler struct {
-	roomUsecase usecase.RoomUsecase
-	upgrader    websocket.Upgrader
+	userLocationUsecase usecase.UserLocationUsecase
+	upgrader            websocket.Upgrader
 }
 
-func NewWebSocketHandler(roomUsecase usecase.RoomUsecase, upgrader websocket.Upgrader) *WebSocketHandler {
-	return &WebSocketHandler{roomUsecase: roomUsecase, upgrader: upgrader}
+func NewWebSocketHandler(userLocationUsecase usecase.UserLocationUsecase, upgrader websocket.Upgrader) *WebSocketHandler {
+	return &WebSocketHandler{userLocationUsecase: userLocationUsecase, upgrader: upgrader}
 }
 
 func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -27,17 +27,17 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 	defer conn.Close()
 
-	client := model.NewClientByConn(conn)
+	userLocation := model.NewUserLocationByConn(conn)
 
 	for {
 		msg, err := h.readMessage(conn)
 		if err != nil {
-			h.handleDisconnect(client)
+			h.handleDisconnect(userLocation)
 			log.Printf("Error reading message: %v", err)
 			break
 		}
 
-		client, err = h.processMessage(client, msg)
+		userLocation, err = h.processMessage(userLocation, msg)
 		if err != nil {
 			log.Printf("Error processing message: %v", err)
 			break
@@ -55,7 +55,7 @@ func (h *WebSocketHandler) readMessage(conn *websocket.Conn) (map[string]interfa
 	return msg, nil
 }
 
-func (h *WebSocketHandler) processMessage(client *model.Client, msg map[string]interface{}) (*model.Client, error) {
+func (h *WebSocketHandler) processMessage(client *model.UserLocation, msg map[string]interface{}) (*model.UserLocation, error) {
 	switch msg["type"].(string) {
 	case "join-room":
 		return h.handleJoinRoom(client, msg)
@@ -68,92 +68,93 @@ func (h *WebSocketHandler) processMessage(client *model.Client, msg map[string]i
 	}
 }
 
-func (h *WebSocketHandler) handleJoinRoom(client *model.Client, msg map[string]interface{}) (*model.Client, error) {
+func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg map[string]interface{}) (*model.UserLocation, error) {
 	roomId := uint(msg["roomId"].(float64))
 	if !isValidRoomId(roomId) {
-		return client, fmt.Errorf("invalid roomId")
+		return userLocation, fmt.Errorf("invalid roomId")
 	}
-	client.RoomId = roomId
+	userLocation.RoomID = roomId
 
-	fromFirebaseUId, _ := msg["fromFirebaseUid"].(string)
-	if !isValidFromFirebaseUid(fromFirebaseUId) {
-		return client, fmt.Errorf("invalid fromFirebaseUid")
+	fromUserID := uint(msg["fromUserID"].(float64))
+	if !isValidFromFirebaseUid(fromUserID) {
+		return userLocation, fmt.Errorf("invalid fromUserID")
 	}
-	client.UserId = fromFirebaseUId
+	userLocation.UserID = fromUserID
 
-	clientPt, err := h.roomUsecase.ConnectClient(*client)
+	userLocationPT, err := h.userLocationUsecase.ConnectUserLocation(userLocation)
 	if err != nil {
 		log.Printf("Error connecting client to room: %v", err)
-		return client, err
+		return userLocationPT, err
 	}
-	client = clientPt
-	connectedUserIds, err := h.roomUsecase.SendRoomJoinedEvent(client)
+	userLocation = userLocationPT
+	connectedUserIds, err := h.userLocationUsecase.SendRoomJoinedEvent(userLocation)
 	if err != nil {
 		log.Printf("Error sending room joined event: %v", err)
-		h.roomUsecase.DisconnectClient(client.Room.ID, client)
+		h.userLocationUsecase.DisconnectUserLocation(userLocation)
 		return nil, err
 	}
 	roomJoinedMsg := map[string]interface{}{
 		"type":             "client-joined",
 		"connectedUserIds": connectedUserIds,
-		"userId":           client.UserId,
+		"fromUserID":       userLocation.UserID,
 	}
-	err = client.Conn.WriteJSON(roomJoinedMsg)
+	err = userLocation.Conn.WriteJSON(roomJoinedMsg)
 	if err != nil {
 		log.Printf("Error sending client-joined event to client: %v", err)
-		h.roomUsecase.DisconnectClient(client.Room.ID, client)
+		h.userLocationUsecase.DisconnectUserLocation(userLocation)
 	}
-	return client, nil
+	return userLocation, nil
 }
 
-func (h *WebSocketHandler) handleLeaveRoom(client *model.Client, msg map[string]interface{}) (*model.Client, error) {
-	h.roomUsecase.DisconnectClient(client.RoomId, client)
+func (h *WebSocketHandler) handleLeaveRoom(userLocation *model.UserLocation, msg map[string]interface{}) (*model.UserLocation, error) {
+	h.userLocationUsecase.DisconnectUserLocation(userLocation)
 	// 全てのクライアントに leave-room イベントをブロードキャスト
 	leaveRoomMsg := map[string]interface{}{
 		"type":            "leave-room",
-		"fromFirebaseUid": client.UserId,
+		"fromFirebaseUid": userLocation.UserID,
 	}
 
-	err := h.roomUsecase.BroadcastMessageToOtherClients(client, &model.Message{Payload: leaveRoomMsg})
+	err := h.userLocationUsecase.BroadcastMessageToOtherClients(userLocation, &model.Message{Payload: leaveRoomMsg})
 	if err != nil {
 		log.Printf("Error broadcasting leave-room event: %v", err)
 		return nil, err
 	}
-	return client, nil
+	return userLocation, nil
 }
 
-func (h *WebSocketHandler) handleSignalingMessage(client *model.Client, msg map[string]interface{}) (*model.Client, error) {
-	toFirebaseUid, ok := msg["toFirebaseUid"].(string)
-	if !ok {
-		log.Printf("toFirebaseUid is missing")
-		return nil, fmt.Errorf("toFirebaseUid is missing")
+func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) (*model.UserLocation, error) {
+	toUserID := uint(msg["toUserID"].(float64))
+	if !isValidRoomId(toUserID) {
+		return userLocation, fmt.Errorf("invalid toUserID")
 	}
+
 	// 送信先が自分自身でなければメッセージを送信する
-	if toFirebaseUid != client.UserId {
+	if toUserID != userLocation.UserID {
 		// 来たメッセージをそのまま送信する
 		msgPayload := &model.Message{Payload: msg}
-		h.roomUsecase.SendMessageToOtherClients(client, toFirebaseUid, msgPayload)
+		h.userLocationUsecase.SendMessageToOtherClients(userLocation, msgPayload)
 	}
-	return client, nil
+	return userLocation, nil
 }
 
-func (h *WebSocketHandler) handleDisconnect(client *model.Client) error {
-	h.roomUsecase.DisconnectClient(client.RoomId, client)
+func (h *WebSocketHandler) handleDisconnect(userLocation *model.UserLocation) error {
+	h.userLocationUsecase.DisconnectUserLocation(userLocation)
 	leaveRoomMsg := map[string]interface{}{
-		"type":            "leave-room",
-		"fromFirebaseUid": client.UserId,
+		"type":       "leave-room",
+		"fromUserID": userLocation.UserID,
 	}
-	err := h.roomUsecase.BroadcastMessageToOtherClients(client, &model.Message{Payload: leaveRoomMsg})
+	err := h.userLocationUsecase.BroadcastMessageToOtherClients(userLocation, &model.Message{Payload: leaveRoomMsg})
 	if err != nil {
 		log.Printf("Error broadcasting leave-room event: %v", err)
 		return err
 	}
 	return nil
 }
+
 func isValidRoomId(roomId uint) bool {
 	return roomId != 0
 }
 
-func isValidFromFirebaseUid(fromFirebaseUId string) bool {
-	return fromFirebaseUId != ""
+func isValidFromFirebaseUid(fromUserID uint) bool {
+	return fromUserID != 0
 }

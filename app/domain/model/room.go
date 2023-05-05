@@ -1,10 +1,15 @@
 package model
 
-type Room struct {
-	ID      uint
-	Clients []Client
-}
+import (
+	"gorm.io/gorm"
+)
 
-func NewRoom(id uint) *Room {
-	return &Room{ID: id}
+type Room struct {
+	gorm.Model
+	AreaID        uint
+	Area          Area
+	RoomTypeID    uint
+	RoomType      RoomType
+	Status        int
+	UserLocations []UserLocation
 }
