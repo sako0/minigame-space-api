@@ -9,5 +9,5 @@ type InMemoryUserLocationRepository interface {
 	Find(userID uint) (*model.UserLocation, bool)
 	Delete(userID uint)
 	Update(userLocation *model.UserLocation)
-	GetAllUserLocationsByRoomId(roomId uint) ([]*model.UserLocation, error)
+	GetAllUserLocationsByRoomId(roomId uint) []*model.UserLocation
 }

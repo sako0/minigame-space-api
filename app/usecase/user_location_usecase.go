@@ -49,18 +49,10 @@ func (uc *UserLocationUsecase) DisconnectUserLocation(userLocation *model.UserLo
 
 }
 
-func (uc *UserLocationUsecase) BroadcastMessageToOtherClients(userLocation *model.UserLocation, msg *model.Message) error {
-
-	msgPayload := msg.Payload
-	msgPayload["fromUserID"] = userLocation.UserID
-
-	// 接続中のユーザーIDを取得する
-	connectedUserIds, err := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
+func (uc *UserLocationUsecase) BroadcastMessage(userLocation *model.UserLocation, msgPayload map[string]interface{}) error {
+	connectedUserIds := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
-	if err != nil {
-		log.Printf("Error getting connectedUserIds: %v", err)
-		return err
-	}
+
 	for _, otherClient := range connectedUserIds {
 		if otherClient.UserID != userLocation.UserID {
 			err := otherClient.Conn.WriteJSON(msgPayload)
@@ -72,41 +64,21 @@ func (uc *UserLocationUsecase) BroadcastMessageToOtherClients(userLocation *mode
 		}
 	}
 	return nil
-
 }
 
 func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocation) ([]*model.UserLocation, error) {
-	// 接続中のユーザーIDを取得する
-	connectedUserIds, err := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
+	connectedUserIds := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
-	if err != nil {
-		return nil, err
+	roomJoinedMsg := map[string]interface{}{
+		"type":             "client-joined",
+		"connectedUserIds": connectedUserIds,
+		"fromUserID":       userLocation.UserID,
 	}
-
-	return connectedUserIds, nil
+	return connectedUserIds, uc.BroadcastMessage(userLocation, roomJoinedMsg)
 }
 
 func (uc *UserLocationUsecase) SendMessageToOtherClients(userLocation *model.UserLocation, msg *model.Message) error {
-
 	msgPayload := msg.Payload
 	msgPayload["fromUserID"] = userLocation.UserID
-
-	// 接続中のユーザーIDを取得する
-	connectedUserIds, err := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
-	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
-	if err != nil {
-		return err
-	}
-
-	for _, otherClient := range connectedUserIds {
-		if otherClient.UserID != userLocation.UserID {
-			err := otherClient.Conn.WriteJSON(msg)
-			if err != nil {
-				log.Printf("Error sending message to client: %v", err)
-				uc.DisconnectUserLocation(otherClient)
-				return err
-			}
-		}
-	}
-	return nil
+	return uc.BroadcastMessage(userLocation, msgPayload)
 }

@@ -46,7 +46,7 @@ func (r *InMemoryUserLocationRepository) Update(userLocation *model.UserLocation
 	r.store[userLocation.UserID] = userLocation
 }
 
-func (r *InMemoryUserLocationRepository) GetAllUserLocationsByRoomId(roomId uint) ([]*model.UserLocation, error) {
+func (r *InMemoryUserLocationRepository) GetAllUserLocationsByRoomId(roomId uint) []*model.UserLocation {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -56,5 +56,5 @@ func (r *InMemoryUserLocationRepository) GetAllUserLocationsByRoomId(roomId uint
 			userLocations = append(userLocations, userLocation)
 		}
 	}
-	return userLocations, nil
+	return userLocations
 }

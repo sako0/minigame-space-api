@@ -5,9 +5,9 @@ import (
 )
 
 type UserLocationRepository interface {
-	GetUserLocation(userId uint) (*model.UserLocation, error)
+	GetUserLocation(userId uint) (*model.UserLocation, bool, error)
 	AddUserLocation(userLocation *model.UserLocation) error
 	RemoveUserLocation(userId uint) error
 	UpdateUserLocation(userLocation *model.UserLocation) error
-	GetAllUserLocationsByRoomId(roomId uint) ([]*model.UserLocation, error)
+	GetAllUserLocationsByRoomId(roomId uint) ([]*model.UserLocation, bool, error)
 }
