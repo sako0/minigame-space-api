@@ -23,7 +23,6 @@ func (uc *RoomUsecase) ConnectClient(client model.Client) (*model.Client, error)
 		room = model.NewRoom(client.RoomId)
 		uc.roomRepo.AddRoom(client.RoomId, room)
 	}
-	log.Printf("room: %+v", room)
 
 	// 既に同じクライアントが接続している場合は何もしない
 	for _, otherClient := range uc.clientRepo.GetAllClientsByRoomId(room.ID) {

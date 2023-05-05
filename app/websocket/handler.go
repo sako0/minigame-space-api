@@ -27,9 +27,7 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 	defer conn.Close()
 
-	client := &model.Client{
-		Conn: conn,
-	}
+	client := model.NewClientByConn(conn)
 
 	for {
 		msg, err := h.readMessage(conn)
@@ -72,13 +70,13 @@ func (h *WebSocketHandler) processMessage(client *model.Client, msg map[string]i
 
 func (h *WebSocketHandler) handleJoinRoom(client *model.Client, msg map[string]interface{}) (*model.Client, error) {
 	roomId := uint(msg["roomId"].(float64))
-	if roomId == 0 {
+	if !isValidRoomId(roomId) {
 		return client, fmt.Errorf("invalid roomId")
 	}
 	client.RoomId = roomId
 
-	fromFirebaseUId, ok := msg["fromFirebaseUid"].(string)
-	if !ok {
+	fromFirebaseUId, _ := msg["fromFirebaseUid"].(string)
+	if !isValidFromFirebaseUid(fromFirebaseUId) {
 		return client, fmt.Errorf("invalid fromFirebaseUid")
 	}
 	client.UserId = fromFirebaseUId
@@ -100,7 +98,6 @@ func (h *WebSocketHandler) handleJoinRoom(client *model.Client, msg map[string]i
 		"connectedUserIds": connectedUserIds,
 		"userId":           client.UserId,
 	}
-	log.Printf("client Conn: %v", client.Conn)
 	err = client.Conn.WriteJSON(roomJoinedMsg)
 	if err != nil {
 		log.Printf("Error sending client-joined event to client: %v", err)
@@ -152,4 +149,11 @@ func (h *WebSocketHandler) handleDisconnect(client *model.Client) error {
 		return err
 	}
 	return nil
+}
+func isValidRoomId(roomId uint) bool {
+	return roomId != 0
+}
+
+func isValidFromFirebaseUid(fromFirebaseUId string) bool {
+	return fromFirebaseUId != ""
 }

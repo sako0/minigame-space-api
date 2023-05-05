@@ -12,3 +12,7 @@ type Client struct {
 func NewClient(conn *websocket.Conn, room *Room, userId string) *Client {
 	return &Client{Conn: conn, Room: room, UserId: userId}
 }
+
+func NewClientByConn(conn *websocket.Conn) *Client {
+	return &Client{Conn: conn}
+}
