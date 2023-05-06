@@ -39,6 +39,7 @@ func (uc *UserLocationUsecase) ConnectUserLocation(userLocation *model.UserLocat
 
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 
+	// connectedUserLocationsの中に既に同じRoomIDでかつ同じUserIDを持つものがある場合は何もせずに終了
 	for _, otherUserLocation := range connectedUserLocations {
 		if otherUserLocation.RoomID == userLocation.RoomID && otherUserLocation.UserID == userLocation.UserID {
 			return nil
