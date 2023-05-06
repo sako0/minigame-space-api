@@ -57,13 +57,8 @@ func (uc *UserLocationUsecase) ConnectUserLocation(userLocation *model.UserLocat
 
 func (uc *UserLocationUsecase) DisconnectUserLocation(userLocation *model.UserLocation) error {
 	uc.inMemoryUserLocationRepo.Delete(userLocation.UserID)
-	err := uc.userLocationRepo.RemoveUserLocation(userLocation.UserID)
-	if err != nil {
-		log.Printf("Error removing userLocation: %v", err)
-		return err
-	}
-	return nil
 
+	return nil
 }
 
 func (uc *UserLocationUsecase) BroadcastMessage(userLocation *model.UserLocation, msgPayload map[string]interface{}) error {

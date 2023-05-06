@@ -9,9 +9,9 @@ type UserLocation struct {
 	gorm.Model
 	UserID   uint
 	User     *User
-	AreaID   uint
+	AreaID   uint `gorm:"default:null"`
 	Area     *Area
-	RoomID   uint
+	RoomID   uint `gorm:"default:null"`
 	Room     *Room
 	XAxis    int
 	YAxis    int

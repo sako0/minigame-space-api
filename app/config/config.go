@@ -21,7 +21,7 @@ func loadDatabaseURL(dbName string) (string, error) {
 	if mysqlHost == "" || mysqlUser == "" || mysqlPassword == "" || mysqlPort == "" {
 		return "", fmt.Errorf("環境変数が不足しています。MYSQL_HOST: %s, MYSQL_USER: %s, MYSQL_PASSWORD: %s, MYSQL_PORT: %s", mysqlHost, mysqlUser, mysqlPassword, mysqlPort)
 	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, dbName), nil
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Asia%%2FTokyo", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, dbName), nil
 }
 
 func LoadConfig() (*AppConfig, error) {
