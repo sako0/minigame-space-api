@@ -59,15 +59,44 @@ func (h *WebSocketHandler) readMessage(conn *websocket.Conn) (map[string]interfa
 
 func (h *WebSocketHandler) processMessage(client *model.UserLocation, msg map[string]interface{}) error {
 	switch msg["type"].(string) {
+	case "join-area":
+		return h.handleJoinArea(client, msg)
 	case "join-room":
 		return h.handleJoinRoom(client, msg)
 	case "leave-room":
 		return h.handleLeaveRoom(client, msg)
+	case "move":
+		return h.handleMove(client, msg)
 	case "offer", "answer", "ice-candidate":
 		return h.handleSignalingMessage(client, msg)
 	default:
 		return fmt.Errorf("unknown message type")
 	}
+}
+
+func (h *WebSocketHandler) handleJoinArea(userLocation *model.UserLocation, msg map[string]interface{}) error {
+	areaId := uint(msg["areaId"].(float64))
+	userLocation.AreaID = areaId
+
+	fromUserID := uint(msg["fromUserID"].(float64))
+	if !isValidUserId(fromUserID) {
+		return fmt.Errorf("invalid fromUserID")
+	}
+	userLocation.UserID = fromUserID
+
+	err := h.userLocationUsecase.ConnectUserLocation(userLocation)
+	if err != nil {
+		log.Printf("Error connecting client to area: %v", err)
+		return err
+	}
+	err = h.userLocationUsecase.SendAreaJoinedEvent(userLocation)
+	if err != nil {
+		log.Printf("Error sending area joined event: %v", err)
+		h.userLocationUsecase.DisconnectUserLocation(userLocation)
+		return err
+	}
+
+	return nil
 }
 
 func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg map[string]interface{}) error {
@@ -100,6 +129,22 @@ func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg 
 
 func (h *WebSocketHandler) handleLeaveRoom(userLocation *model.UserLocation, msg map[string]interface{}) error {
 	return h.disconnectClient(userLocation)
+}
+
+func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[string]interface{}) error {
+	xAxis := int(msg["xAxis"].(float64))
+	yAxis := int(msg["yAxis"].(float64))
+
+	userLocation.XAxis = xAxis
+	userLocation.YAxis = yAxis
+
+	err := h.userLocationUsecase.UpdateUserLocationAndBroadcast(userLocation)
+	if err != nil {
+		log.Printf("Error updating and broadcasting user location: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {
