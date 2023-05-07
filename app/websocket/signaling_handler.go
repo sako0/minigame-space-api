@@ -63,6 +63,8 @@ func (h *WebSocketHandler) processMessage(client *model.UserLocation, msg map[st
 		return h.handleJoinArea(client, msg)
 	case "join-room":
 		return h.handleJoinRoom(client, msg)
+	case "leave-area":
+		return h.handleLeaveArea(client, msg)
 	case "leave-room":
 		return h.handleLeaveRoom(client, msg)
 	case "move":
@@ -126,7 +128,9 @@ func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg 
 
 	return nil
 }
-
+func (h *WebSocketHandler) handleLeaveArea(userLocation *model.UserLocation, msg map[string]interface{}) error {
+	return h.disconnectClient(userLocation)
+}
 func (h *WebSocketHandler) handleLeaveRoom(userLocation *model.UserLocation, msg map[string]interface{}) error {
 	return h.disconnectClient(userLocation)
 }
