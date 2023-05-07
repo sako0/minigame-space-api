@@ -55,6 +55,21 @@ func (r *UserLocationRepository) UpdateUserLocation(userLocation *model.UserLoca
 	return nil
 }
 
+func (r *UserLocationRepository) GetAllUserLocationsByAreaId(areaId uint) ([]*model.UserLocation, bool, error) {
+	userLocations := []*model.UserLocation{}
+	result := r.db.Where("area_id = ?", areaId).Find(&userLocations)
+
+	if result.Error == gorm.ErrRecordNotFound {
+		return nil, false, nil
+	}
+
+	if result.Error != nil {
+		return nil, false, fmt.Errorf("GetAllUserLocationsByAreaId: %v", result.Error)
+	}
+
+	return userLocations, true, nil
+}
+
 func (r *UserLocationRepository) GetAllUserLocationsByRoomId(roomId uint) ([]*model.UserLocation, bool, error) {
 	userLocations := []*model.UserLocation{}
 	result := r.db.Where("room_id = ?", roomId).Find(&userLocations)

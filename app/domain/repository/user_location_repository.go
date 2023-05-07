@@ -9,5 +9,6 @@ type UserLocationRepository interface {
 	AddUserLocation(userLocation *model.UserLocation) error
 	RemoveUserLocation(userId uint) error
 	UpdateUserLocation(userLocation *model.UserLocation) error
+	GetAllUserLocationsByAreaId(areaId uint) ([]*model.UserLocation, bool, error)
 	GetAllUserLocationsByRoomId(roomId uint) ([]*model.UserLocation, bool, error)
 }

@@ -46,6 +46,19 @@ func (r *InMemoryUserLocationRepository) Update(userLocation *model.UserLocation
 	r.store[userLocation.UserID] = userLocation
 }
 
+func (r *InMemoryUserLocationRepository) GetAllUserLocationsByAreaId(areaId uint) []*model.UserLocation {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	userLocations := make([]*model.UserLocation, 0, len(r.store))
+	for _, userLocation := range r.store {
+		if userLocation.AreaID == areaId {
+			userLocations = append(userLocations, userLocation)
+		}
+	}
+	return userLocations
+}
+
 func (r *InMemoryUserLocationRepository) GetAllUserLocationsByRoomId(roomId uint) []*model.UserLocation {
 	r.mu.Lock()
 	defer r.mu.Unlock()
