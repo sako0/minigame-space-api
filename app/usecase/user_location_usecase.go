@@ -106,7 +106,7 @@ func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocat
 	}
 	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
 	areaJoinedMsg := map[string]interface{}{
-		"areaId":           userLocation.AreaID,
+		"areaID":           userLocation.AreaID,
 		"type":             "joined-area",
 		"connectedUserIds": connectedUserIds,
 		"fromUserID":       userLocation.UserID,
@@ -197,8 +197,8 @@ func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) err
 	}
 	leaveMsg := map[string]interface{}{
 		"type":       "leave-area",
-		"areaId":     userLocation.AreaID,
-		"roomId":     userLocation.RoomID,
+		"areaID":     userLocation.AreaID,
+		"roomID":     userLocation.RoomID,
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
@@ -216,8 +216,8 @@ func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation) err
 
 	leaveMsg := map[string]interface{}{
 		"type":       "leave-room",
-		"areaId":     userLocation.AreaID,
-		"roomId":     userLocation.RoomID,
+		"areaID":     userLocation.AreaID,
+		"roomID":     userLocation.RoomID,
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
@@ -234,8 +234,8 @@ func (uc *UserLocationUsecase) DisconnectInAll(userLocation *model.UserLocation)
 	}
 	disconnectMsg := map[string]interface{}{
 		"type":       "disconnect",
-		"areaId":     userLocation.AreaID,
-		"roomId":     userLocation.RoomID,
+		"areaID":     userLocation.AreaID,
+		"roomID":     userLocation.RoomID,
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(disconnectMsg)

@@ -76,8 +76,8 @@ func (h *WebSocketHandler) processMessage(client *model.UserLocation, msg map[st
 }
 
 func (h *WebSocketHandler) handleJoinArea(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	areaId := uint(msg["areaId"].(float64))
-	userLocation.AreaID = areaId
+	areaID := uint(msg["areaID"].(float64))
+	userLocation.AreaID = areaID
 
 	fromUserID := uint(msg["fromUserID"].(float64))
 	if !isValidUserId(fromUserID) {
