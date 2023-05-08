@@ -135,13 +135,17 @@ func (h *WebSocketHandler) handleLeaveRoom(userLocation *model.UserLocation, msg
 }
 
 func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[string]interface{}) error {
+	fromUserID := uint(msg["fromUserID"].(float64))
+	if !isValidUserId(fromUserID) {
+		return fmt.Errorf("invalid fromUserID")
+	}
+	areaID := uint(msg["areaID"].(float64))
+	userLocation.UserID = fromUserID
+	userLocation.AreaID = areaID
 	xAxis := int(msg["xAxis"].(float64))
 	yAxis := int(msg["yAxis"].(float64))
 
-	userLocation.XAxis = xAxis
-	userLocation.YAxis = yAxis
-
-	err := h.userLocationUsecase.UpdateUserLocationAndBroadcastInArea(userLocation)
+	err := h.userLocationUsecase.MoveInArea(userLocation, xAxis, yAxis)
 	if err != nil {
 		log.Printf("Error updating and broadcasting user location: %v", err)
 		return err

@@ -104,12 +104,21 @@ func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocat
 			connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
 		}
 	}
-	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
+	axisLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("userLocation is not exist")
+	}
+
 	areaJoinedMsg := map[string]interface{}{
 		"areaID":           userLocation.AreaID,
 		"type":             "joined-area",
 		"connectedUserIds": connectedUserIds,
 		"fromUserID":       userLocation.UserID,
+		"xAxis":            axisLocation.XAxis,
+		"yAxis":            axisLocation.YAxis,
 	}
 	msg := model.NewMessage(areaJoinedMsg)
 	return uc.SendMessageToSameArea(userLocation, msg)
@@ -125,27 +134,39 @@ func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocat
 			connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
 		}
 	}
-	log.Printf("Initial connectedUserIds: %v", connectedUserIds)
+	axisLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("userLocation is not exist")
+	}
 	roomJoinedMsg := map[string]interface{}{
 		"type":             "client-joined",
 		"connectedUserIds": connectedUserIds,
 		"fromUserID":       userLocation.UserID,
+		"xAxis":            axisLocation.XAxis,
+		"yAxis":            axisLocation.YAxis,
 	}
 	msg := model.NewMessage(roomJoinedMsg)
 	return uc.SendMessageToSameRoom(userLocation, msg)
 }
 
-func (uc *UserLocationUsecase) UpdateUserLocationAndBroadcastInArea(userLocation *model.UserLocation) error {
+func (uc *UserLocationUsecase) MoveInArea(userLocation *model.UserLocation, xAxis int, yAxis int) error {
+	userLocation.XAxis = xAxis
+	userLocation.YAxis = yAxis
+	log.Printf("XAxis: %d, YAxis: %d", xAxis, yAxis)
 	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
 		return err
 	}
+	uc.inMemoryUserLocationRepo.Store(userLocation)
 	moveMsg := map[string]interface{}{
 		"type":       "move",
-		"AreaID":     userLocation.AreaID,
+		"areaID":     userLocation.AreaID,
 		"fromUserID": userLocation.UserID,
-		"xAxis":      userLocation.XAxis,
-		"yAxis":      userLocation.YAxis,
+		"xAxis":      xAxis,
+		"yAxis":      yAxis,
 	}
 
 	msg := model.NewMessage(moveMsg)
@@ -155,7 +176,7 @@ func (uc *UserLocationUsecase) UpdateUserLocationAndBroadcastInArea(userLocation
 func (uc *UserLocationUsecase) SendMessageToSameArea(userLocation *model.UserLocation, msg *model.Message) error {
 	msgPayload := msg.Payload
 	msgPayload["fromUserID"] = userLocation.UserID
-	msgPayload["areaId"] = userLocation.AreaID
+	msgPayload["areaID"] = userLocation.AreaID
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByAreaId(userLocation.AreaID)
 	for _, otherClient := range connectedUserLocations {
 		if otherClient.UserID != userLocation.UserID {
