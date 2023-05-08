@@ -2,6 +2,7 @@
 package usecase
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
@@ -187,9 +188,10 @@ func (uc *UserLocationUsecase) SendMessageToSameRoom(userLocation *model.UserLoc
 }
 
 func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) error {
-	// uc.inMemoryUserLocationRepo.Delete(userLocation.UserID)
 	leaveMsg := map[string]interface{}{
 		"type":       "leave-area",
+		"areaID":     userLocation.AreaID,
+		"roomID":     userLocation.RoomID,
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
@@ -197,9 +199,18 @@ func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) err
 }
 
 func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation) error {
-	// uc.inMemoryUserLocationRepo.Delete(userLocation.UserID)
+	userLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("user location not found")
+	}
+
 	leaveMsg := map[string]interface{}{
 		"type":       "leave-room",
+		"areaId":     userLocation.AreaID,
+		"roomId":     userLocation.RoomID,
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
@@ -207,8 +218,17 @@ func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation) err
 }
 
 func (uc *UserLocationUsecase) DisconnectInAll(userLocation *model.UserLocation) error {
+	userLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("user location not found")
+	}
 	disconnectMsg := map[string]interface{}{
 		"type":       "disconnect",
+		"areaId":     userLocation.AreaID,
+		"roomId":     userLocation.RoomID,
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(disconnectMsg)
