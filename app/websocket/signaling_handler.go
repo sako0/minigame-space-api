@@ -28,19 +28,18 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	defer conn.Close()
 
 	userLocation := model.NewUserLocationByConn(conn)
-	userLocation.AreaID = 1 // TODO: 仮
 
 	for {
 		msg, err := h.readMessage(conn)
 		if err != nil {
-			h.disconnectClient(userLocation)
+			h.disconnectInAll(userLocation)
 			log.Printf("Error reading message: %v", err)
 			break
 		}
 
 		err = h.processMessage(userLocation, msg)
 		if err != nil {
-			h.disconnectClient(userLocation)
+			h.disconnectInAll(userLocation)
 			log.Printf("Error processing message: %v", err)
 			break
 		}
@@ -129,10 +128,10 @@ func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg 
 	return nil
 }
 func (h *WebSocketHandler) handleLeaveArea(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	return h.disconnectClient(userLocation)
+	return h.userLocationUsecase.LeaveInArea(userLocation)
 }
 func (h *WebSocketHandler) handleLeaveRoom(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	return h.disconnectClient(userLocation)
+	return h.userLocationUsecase.LeaveInRoom(userLocation)
 }
 
 func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[string]interface{}) error {
@@ -142,13 +141,17 @@ func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[
 	userLocation.XAxis = xAxis
 	userLocation.YAxis = yAxis
 
-	err := h.userLocationUsecase.UpdateUserLocationAndBroadcast(userLocation)
+	err := h.userLocationUsecase.UpdateUserLocationAndBroadcastInArea(userLocation)
 	if err != nil {
 		log.Printf("Error updating and broadcasting user location: %v", err)
 		return err
 	}
 
 	return nil
+}
+
+func (h *WebSocketHandler) disconnectInAll(userLocation *model.UserLocation) error {
+	return h.userLocationUsecase.DisconnectInAll(userLocation)
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {
@@ -166,24 +169,11 @@ func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocati
 	return nil
 }
 
+// ヘルパー関数
 func isValidRoomId(roomId uint) bool {
 	return roomId != 0
 }
 
 func isValidUserId(fromUserID uint) bool {
 	return fromUserID != 0
-}
-
-func (h *WebSocketHandler) disconnectClient(userLocation *model.UserLocation) error {
-	h.userLocationUsecase.DisconnectUserLocation(userLocation)
-	leaveRoomMsg := map[string]interface{}{
-		"type":       "leave-room",
-		"fromUserID": userLocation.UserID,
-	}
-	err := h.userLocationUsecase.SendMessageToSameRoom(userLocation, &model.Message{Payload: leaveRoomMsg})
-	if err != nil {
-		log.Printf("Error broadcasting leave-room event: %v", err)
-		return err
-	}
-	return nil
 }
