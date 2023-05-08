@@ -188,10 +188,17 @@ func (uc *UserLocationUsecase) SendMessageToSameRoom(userLocation *model.UserLoc
 }
 
 func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) error {
+	userLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("user location not found")
+	}
 	leaveMsg := map[string]interface{}{
 		"type":       "leave-area",
-		"areaID":     userLocation.AreaID,
-		"roomID":     userLocation.RoomID,
+		"areaId":     userLocation.AreaID,
+		"roomId":     userLocation.RoomID,
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
