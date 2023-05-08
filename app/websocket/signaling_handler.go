@@ -86,7 +86,7 @@ func (h *WebSocketHandler) handleJoinArea(userLocation *model.UserLocation, msg 
 	}
 	userLocation.UserID = fromUserID
 
-	err := h.userLocationUsecase.ConnectUserLocation(userLocation)
+	err := h.userLocationUsecase.ConnectUserLocationForArea(userLocation)
 	if err != nil {
 		log.Printf("Error connecting client to area: %v", err)
 		return err
@@ -114,7 +114,7 @@ func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg 
 	}
 	userLocation.UserID = fromUserID
 
-	err := h.userLocationUsecase.ConnectUserLocation(userLocation)
+	err := h.userLocationUsecase.ConnectUserLocationForRoom(userLocation)
 	if err != nil {
 		log.Printf("Error connecting client to room: %v", err)
 		return err
@@ -161,7 +161,7 @@ func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocati
 	if toUserID != userLocation.UserID {
 		// 来たメッセージをそのまま送信する
 		msgPayload := &model.Message{Payload: msg}
-		h.userLocationUsecase.SendMessageToOtherClients(userLocation, msgPayload)
+		h.userLocationUsecase.SendMessageToSameRoom(userLocation, msgPayload)
 	}
 	return nil
 }
@@ -180,7 +180,7 @@ func (h *WebSocketHandler) disconnectClient(userLocation *model.UserLocation) er
 		"type":       "leave-room",
 		"fromUserID": userLocation.UserID,
 	}
-	err := h.userLocationUsecase.SendMessageToOtherClients(userLocation, &model.Message{Payload: leaveRoomMsg})
+	err := h.userLocationUsecase.SendMessageToSameRoom(userLocation, &model.Message{Payload: leaveRoomMsg})
 	if err != nil {
 		log.Printf("Error broadcasting leave-room event: %v", err)
 		return err
