@@ -28,19 +28,18 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	defer conn.Close()
 
 	userLocation := model.NewUserLocationByConn(conn)
-	userLocation.AreaID = 1 // TODO: 仮
 
 	for {
 		msg, err := h.readMessage(conn)
 		if err != nil {
-			h.disconnectClient(userLocation)
+			h.disconnectInAll(userLocation)
 			log.Printf("Error reading message: %v", err)
 			break
 		}
 
 		err = h.processMessage(userLocation, msg)
 		if err != nil {
-			h.disconnectClient(userLocation)
+			h.disconnectInAll(userLocation)
 			log.Printf("Error processing message: %v", err)
 			break
 		}
@@ -77,8 +76,8 @@ func (h *WebSocketHandler) processMessage(client *model.UserLocation, msg map[st
 }
 
 func (h *WebSocketHandler) handleJoinArea(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	areaId := uint(msg["areaId"].(float64))
-	userLocation.AreaID = areaId
+	areaID := uint(msg["areaID"].(float64))
+	userLocation.AreaID = areaID
 
 	fromUserID := uint(msg["fromUserID"].(float64))
 	if !isValidUserId(fromUserID) {
@@ -86,7 +85,7 @@ func (h *WebSocketHandler) handleJoinArea(userLocation *model.UserLocation, msg 
 	}
 	userLocation.UserID = fromUserID
 
-	err := h.userLocationUsecase.ConnectUserLocation(userLocation)
+	err := h.userLocationUsecase.ConnectUserLocationForArea(userLocation)
 	if err != nil {
 		log.Printf("Error connecting client to area: %v", err)
 		return err
@@ -114,7 +113,7 @@ func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg 
 	}
 	userLocation.UserID = fromUserID
 
-	err := h.userLocationUsecase.ConnectUserLocation(userLocation)
+	err := h.userLocationUsecase.ConnectUserLocationForRoom(userLocation)
 	if err != nil {
 		log.Printf("Error connecting client to room: %v", err)
 		return err
@@ -129,26 +128,34 @@ func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg 
 	return nil
 }
 func (h *WebSocketHandler) handleLeaveArea(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	return h.disconnectClient(userLocation)
+	return h.userLocationUsecase.LeaveInArea(userLocation)
 }
 func (h *WebSocketHandler) handleLeaveRoom(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	return h.disconnectClient(userLocation)
+	return h.userLocationUsecase.LeaveInRoom(userLocation)
 }
 
 func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[string]interface{}) error {
+	fromUserID := uint(msg["fromUserID"].(float64))
+	if !isValidUserId(fromUserID) {
+		return fmt.Errorf("invalid fromUserID")
+	}
+	areaID := uint(msg["areaID"].(float64))
+	userLocation.UserID = fromUserID
+	userLocation.AreaID = areaID
 	xAxis := int(msg["xAxis"].(float64))
 	yAxis := int(msg["yAxis"].(float64))
 
-	userLocation.XAxis = xAxis
-	userLocation.YAxis = yAxis
-
-	err := h.userLocationUsecase.UpdateUserLocationAndBroadcast(userLocation)
+	err := h.userLocationUsecase.MoveInArea(userLocation, xAxis, yAxis)
 	if err != nil {
 		log.Printf("Error updating and broadcasting user location: %v", err)
 		return err
 	}
 
 	return nil
+}
+
+func (h *WebSocketHandler) disconnectInAll(userLocation *model.UserLocation) error {
+	return h.userLocationUsecase.DisconnectInAll(userLocation)
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {
@@ -161,29 +168,16 @@ func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocati
 	if toUserID != userLocation.UserID {
 		// 来たメッセージをそのまま送信する
 		msgPayload := &model.Message{Payload: msg}
-		h.userLocationUsecase.SendMessageToOtherClients(userLocation, msgPayload)
+		h.userLocationUsecase.SendMessageToSameRoom(userLocation, msgPayload)
 	}
 	return nil
 }
 
+// ヘルパー関数
 func isValidRoomId(roomId uint) bool {
 	return roomId != 0
 }
 
 func isValidUserId(fromUserID uint) bool {
 	return fromUserID != 0
-}
-
-func (h *WebSocketHandler) disconnectClient(userLocation *model.UserLocation) error {
-	h.userLocationUsecase.DisconnectUserLocation(userLocation)
-	leaveRoomMsg := map[string]interface{}{
-		"type":       "leave-room",
-		"fromUserID": userLocation.UserID,
-	}
-	err := h.userLocationUsecase.SendMessageToOtherClients(userLocation, &model.Message{Payload: leaveRoomMsg})
-	if err != nil {
-		log.Printf("Error broadcasting leave-room event: %v", err)
-		return err
-	}
-	return nil
 }
