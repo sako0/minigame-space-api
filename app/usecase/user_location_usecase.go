@@ -26,6 +26,7 @@ func (uc *UserLocationUsecase) ConnectUserLocationForArea(userLocation *model.Us
 	// UserLocationが存在しない場合は新規作成
 	_, isExist, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
+		uc.DisconnectUserLocation(userLocation)
 		return err
 	}
 
@@ -61,6 +62,7 @@ func (uc *UserLocationUsecase) ConnectUserLocationForRoom(userLocation *model.Us
 	// UserLocationが存在しない場合は新規作成
 	_, isExist, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
+		uc.DisconnectUserLocation(userLocation)
 		return err
 	}
 
@@ -68,6 +70,7 @@ func (uc *UserLocationUsecase) ConnectUserLocationForRoom(userLocation *model.Us
 		log.Println("userLocation is not exist")
 		err := uc.userLocationRepo.AddUserLocation(userLocation)
 		if err != nil {
+			uc.DisconnectUserLocation(userLocation)
 			return err
 		}
 	}
@@ -82,6 +85,7 @@ func (uc *UserLocationUsecase) ConnectUserLocationForRoom(userLocation *model.Us
 	}
 	err = uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
+		uc.DisconnectUserLocation(userLocation)
 		return err
 	}
 	uc.inMemoryUserLocationRepo.Store(userLocation)
@@ -106,6 +110,7 @@ func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocat
 	}
 	axisLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
+		uc.DisconnectUserLocation(userLocation)
 		return err
 	}
 	if !ok {
@@ -136,6 +141,7 @@ func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocat
 	}
 	axisLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
+		uc.DisconnectUserLocation(userLocation)
 		return err
 	}
 	if !ok {
@@ -225,6 +231,7 @@ func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) err
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
+	uc.DisconnectUserLocation(userLocation)
 	return uc.SendMessageToSameArea(userLocation, msg)
 }
 
@@ -244,9 +251,11 @@ func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation) err
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
+	uc.DisconnectUserLocation(userLocation)
 	return uc.SendMessageToSameRoom(userLocation, msg)
 }
 
+// TODO: 仮にLeaveInRoomをしているが、実際にはDisconnectInAllを使う
 func (uc *UserLocationUsecase) DisconnectInAll(userLocation *model.UserLocation) error {
 	userLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
@@ -262,7 +271,7 @@ func (uc *UserLocationUsecase) DisconnectInAll(userLocation *model.UserLocation)
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(disconnectMsg)
-	uc.inMemoryUserLocationRepo.Delete(userLocation.UserID)
+	uc.DisconnectUserLocation(userLocation)
 	// エリア内にルームがあるので、エリア内のユーザーに送信すれば良い
 	return uc.SendMessageToSameArea(userLocation, msg)
 }

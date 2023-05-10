@@ -32,14 +32,14 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	for {
 		msg, err := h.readMessage(conn)
 		if err != nil {
-			h.disconnectInAll(userLocation)
+			h.disconnect(userLocation)
 			log.Printf("Error reading message: %v", err)
 			break
 		}
 
 		err = h.processMessage(userLocation, msg)
 		if err != nil {
-			h.disconnectInAll(userLocation)
+			h.disconnect(userLocation)
 			log.Printf("Error processing message: %v", err)
 			break
 		}
@@ -154,8 +154,9 @@ func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[
 	return nil
 }
 
-func (h *WebSocketHandler) disconnectInAll(userLocation *model.UserLocation) error {
-	return h.userLocationUsecase.DisconnectInAll(userLocation)
+func (h *WebSocketHandler) disconnect(userLocation *model.UserLocation) error {
+	// TODO: 仮にLeaveInRoomをしているが、実際にはDisconnectInAllを使う
+	return h.userLocationUsecase.LeaveInRoom(userLocation)
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {
