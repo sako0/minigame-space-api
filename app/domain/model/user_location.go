@@ -1,6 +1,8 @@
 package model
 
 import (
+	"sync"
+
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 )
@@ -17,6 +19,7 @@ type UserLocation struct {
 	YAxis    int
 	JoinedAt int
 	Conn     *websocket.Conn `gorm:"-"`
+	Mutex    sync.Mutex      `gorm:"-"`
 }
 
 func NewUserLocationByConn(conn *websocket.Conn) *UserLocation {

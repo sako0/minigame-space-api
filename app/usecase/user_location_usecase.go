@@ -130,9 +130,9 @@ func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocat
 
 	connectedUserIds := []uint{}
 	for _, otherUserLocation := range connectedUserLocations {
-		if otherUserLocation.UserID == userLocation.UserID {
-			connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
-		}
+
+		connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
+
 	}
 	axisLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
@@ -197,6 +197,8 @@ func (uc *UserLocationUsecase) SendMessageToSameRoom(userLocation *model.UserLoc
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(userLocation.RoomID)
 	for _, otherClient := range connectedUserLocations {
 		if otherClient.UserID != userLocation.UserID {
+			otherClient.Mutex.Lock()
+			defer otherClient.Mutex.Unlock()
 			err := otherClient.Conn.WriteJSON(msgPayload)
 			if err != nil {
 				log.Printf("Error sending message to client: %v", err)

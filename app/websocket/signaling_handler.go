@@ -159,17 +159,9 @@ func (h *WebSocketHandler) disconnectInAll(userLocation *model.UserLocation) err
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	toUserID := uint(msg["toUserID"].(float64))
-	if !isValidUserId(toUserID) {
-		return fmt.Errorf("invalid toUserID")
-	}
-
-	// 送信先が自分自身でなければメッセージを送信する
-	if toUserID != userLocation.UserID {
-		// 来たメッセージをそのまま送信する
-		msgPayload := &model.Message{Payload: msg}
-		h.userLocationUsecase.SendMessageToSameRoom(userLocation, msgPayload)
-	}
+	// 来たメッセージをそのまま送信する
+	msgPayload := &model.Message{Payload: msg}
+	h.userLocationUsecase.SendMessageToSameRoom(userLocation, msgPayload)
 	return nil
 }
 
