@@ -101,9 +101,9 @@ func (h *WebSocketHandler) handleJoinArea(userLocation *model.UserLocation, msg 
 }
 
 func (h *WebSocketHandler) handleJoinRoom(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	roomId := uint(msg["roomId"].(float64))
+	roomId := uint(msg["roomID"].(float64))
 	if !isValidRoomId(roomId) {
-		return fmt.Errorf("invalid roomId")
+		return fmt.Errorf("invalid roomID")
 	}
 	userLocation.RoomID = roomId
 
