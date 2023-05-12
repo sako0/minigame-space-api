@@ -32,14 +32,12 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	for {
 		msg, err := h.readMessage(conn)
 		if err != nil {
-			h.disconnect(userLocation)
 			log.Printf("Error reading message: %v", err)
 			break
 		}
 
 		err = h.processMessage(userLocation, msg)
 		if err != nil {
-			h.disconnect(userLocation)
 			log.Printf("Error processing message: %v", err)
 			break
 		}
