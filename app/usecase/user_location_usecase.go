@@ -108,7 +108,7 @@ func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocat
 			connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
 		}
 	}
-	axisLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	location, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
 		uc.DisconnectUserLocation(userLocation)
 		return err
@@ -122,8 +122,8 @@ func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocat
 		"type":             "joined-area",
 		"connectedUserIds": connectedUserIds,
 		"fromUserID":       userLocation.UserID,
-		"xAxis":            axisLocation.XAxis,
-		"yAxis":            axisLocation.YAxis,
+		"xAxis":            location.XAxis,
+		"yAxis":            location.YAxis,
 	}
 	msg := model.NewMessage(areaJoinedMsg)
 	return uc.SendMessageToSameArea(userLocation, msg)
@@ -139,7 +139,7 @@ func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocat
 		connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
 
 	}
-	axisLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+	location, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
 		uc.DisconnectUserLocation(userLocation)
 		return err
@@ -151,8 +151,8 @@ func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocat
 		"type":             "client-joined",
 		"connectedUserIds": connectedUserIds,
 		"fromUserID":       userLocation.UserID,
-		"xAxis":            axisLocation.XAxis,
-		"yAxis":            axisLocation.YAxis,
+		"xAxis":            location.XAxis,
+		"yAxis":            location.YAxis,
 	}
 	msg := model.NewMessage(roomJoinedMsg)
 	return uc.SendMessageToSameRoom(userLocation, msg)
