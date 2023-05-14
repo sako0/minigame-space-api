@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/sako0/minigame-space-api/app/domain/model"
@@ -19,6 +20,9 @@ func NewWebSocketHandler(userLocationUsecase usecase.UserLocationUsecase, upgrad
 	return &WebSocketHandler{userLocationUsecase: userLocationUsecase, upgrader: upgrader}
 }
 
+// websocketの接続を維持するためのping/pongの間隔
+var pongWait = 60 * time.Second
+
 func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -27,7 +31,21 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 	defer conn.Close()
 
+	// websocketの接続を維持するためのping/pongの間隔を設定
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	userLocation := model.NewUserLocationByConn(conn)
+
+	defer func() {
+		// クリーンアップ処理
+		err := h.disconnect(userLocation)
+		if err != nil {
+			log.Printf("Error disconnecting user: %v", err)
+		}
+	}()
 
 	for {
 		msg, err := h.readMessage(conn)
@@ -44,10 +62,17 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+var retryInterval = 500 * time.Millisecond
+
 func (h *WebSocketHandler) readMessage(conn *websocket.Conn) (map[string]interface{}, error) {
 	var msg = map[string]interface{}{}
 	err := conn.ReadJSON(&msg)
 	if err != nil {
+		// 一時的なエラーの場合はリトライ
+		if isTemporary(err) {
+			time.Sleep(retryInterval)
+			return h.readMessage(conn)
+		}
 		log.Printf("Error reading JSON: %v", err)
 		return nil, err
 	}
@@ -55,22 +80,32 @@ func (h *WebSocketHandler) readMessage(conn *websocket.Conn) (map[string]interfa
 }
 
 func (h *WebSocketHandler) processMessage(client *model.UserLocation, msg map[string]interface{}) error {
+	var err error
 	switch msg["type"].(string) {
 	case "join-area":
-		return h.handleJoinArea(client, msg)
+		err = h.handleJoinArea(client, msg)
 	case "join-room":
-		return h.handleJoinRoom(client, msg)
+		err = h.handleJoinRoom(client, msg)
 	case "leave-area":
-		return h.handleLeaveArea(client, msg)
+		err = h.handleLeaveArea(client, msg)
 	case "leave-room":
-		return h.handleLeaveRoom(client, msg)
+		err = h.handleLeaveRoom(client, msg)
 	case "move":
-		return h.handleMove(client, msg)
+		err = h.handleMove(client, msg)
 	case "offer", "answer", "ice-candidate":
-		return h.handleSignalingMessage(client, msg)
+		err = h.handleSignalingMessage(client, msg)
 	default:
-		return fmt.Errorf("unknown message type")
+		err = fmt.Errorf("unknown message type")
 	}
+	if err != nil {
+		// 一時的なエラーの場合はリトライ
+		if isTemporary(err) {
+			time.Sleep(retryInterval)
+			return h.processMessage(client, msg)
+		}
+		log.Printf("Error processing message: %v", err)
+	}
+	return nil
 }
 
 func (h *WebSocketHandler) handleJoinArea(userLocation *model.UserLocation, msg map[string]interface{}) error {
@@ -158,9 +193,13 @@ func (h *WebSocketHandler) disconnect(userLocation *model.UserLocation) error {
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	// 来たメッセージをそのまま送信する
+	toUserID := uint(msg["toUserID"].(float64))
+	if !isValidUserId(toUserID) {
+		return fmt.Errorf("invalid toUserID")
+	}
 	msgPayload := &model.Message{Payload: msg}
-	h.userLocationUsecase.SendMessageToSameRoom(userLocation, msgPayload)
+	// 特定のユーザーにメッセージを送信する(ここでルーム全員に送信するとブラウザ側でメモリエラーになる)
+	h.userLocationUsecase.SendMessageToSpecificUser(userLocation, msgPayload, toUserID)
 	return nil
 }
 
@@ -171,4 +210,12 @@ func isValidRoomId(roomId uint) bool {
 
 func isValidUserId(fromUserID uint) bool {
 	return fromUserID != 0
+}
+
+// 一時的なエラーかどうかを判定する
+func isTemporary(err error) bool {
+	te, ok := err.(interface {
+		Temporary() bool
+	})
+	return ok && te.Temporary()
 }

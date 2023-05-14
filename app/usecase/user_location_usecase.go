@@ -215,6 +215,28 @@ func (uc *UserLocationUsecase) SendMessageToSameRoom(userLocation *model.UserLoc
 	}
 	return nil
 }
+func (uc *UserLocationUsecase) SendMessageToSpecificUser(userLocation *model.UserLocation, msg *model.Message, targetUserID uint) error {
+	msgPayload := msg.Payload
+	msgPayload["fromUserID"] = userLocation.UserID
+	msgPayload["areaID"] = userLocation.AreaID
+	msgPayload["roomID"] = userLocation.RoomID
+
+	targetUserLocation, ok := uc.inMemoryUserLocationRepo.Find(targetUserID)
+	if !ok {
+		return fmt.Errorf("target user location not found for UserID: %d", targetUserID)
+	}
+
+	targetUserLocation.Mutex.Lock()
+	defer targetUserLocation.Mutex.Unlock()
+	err := targetUserLocation.Conn.WriteJSON(msgPayload)
+	if err != nil {
+		log.Printf("Error sending message to client: %v", err)
+		uc.DisconnectUserLocation(targetUserLocation)
+		return err
+	}
+
+	return nil
+}
 
 func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) error {
 	userLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
@@ -251,6 +273,7 @@ func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation) err
 		"fromUserID": userLocation.UserID,
 	}
 	msg := model.NewMessage(leaveMsg)
+	uc.userLocationRepo.UpdateUserLocation(userLocation)
 	uc.DisconnectUserLocation(userLocation)
 	return uc.SendMessageToSameRoom(userLocation, msg)
 }
