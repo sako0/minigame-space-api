@@ -21,7 +21,7 @@ func NewWebSocketHandler(userLocationUsecase usecase.UserLocationUsecase, upgrad
 }
 
 // websocketの接続を維持するためのping/pongの間隔
-var pongWait = 60 * time.Second
+var pongWait = 3600 * time.Second
 
 func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
