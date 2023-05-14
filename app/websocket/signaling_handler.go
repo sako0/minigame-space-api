@@ -50,6 +50,7 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	for {
 		msg, err := h.readMessage(conn)
 		if err != nil {
+			log.Printf("Error reading message msg: %v", msg)
 			log.Printf("Error reading message: %v", err)
 			break
 		}
@@ -68,6 +69,7 @@ func (h *WebSocketHandler) readMessage(conn *websocket.Conn) (map[string]interfa
 	var msg = map[string]interface{}{}
 	err := conn.ReadJSON(&msg)
 	if err != nil {
+		log.Printf("error reading JSON msg: %v", msg)
 		// 一時的なエラーの場合はリトライ
 		if isTemporary(err) {
 			time.Sleep(retryInterval)
