@@ -41,7 +41,7 @@ func main() {
 
 	e := echo.New()
 
-	e.GET("/signaling", func(c echo.Context) error {
+	e.GET("/ws", func(c echo.Context) error {
 		wsHandler.HandleConnections(c.Response().Writer, c.Request())
 		return nil
 	})
