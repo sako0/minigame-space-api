@@ -35,7 +35,7 @@
             ],
             "cpu": 512,
             "memory": 1024,
-            "memoryReservation": 512,
+            "memoryReservation": 1024,
             "essential": true,
             "portMappings": [
                 {
