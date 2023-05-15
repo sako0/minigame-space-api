@@ -164,7 +164,11 @@ func (h *WebSocketHandler) handleLeaveArea(userLocation *model.UserLocation, msg
 	return h.userLocationUsecase.LeaveInArea(userLocation)
 }
 func (h *WebSocketHandler) handleLeaveRoom(userLocation *model.UserLocation, msg map[string]interface{}) error {
-	return h.userLocationUsecase.LeaveInRoom(userLocation)
+	roomID := uint(msg["roomID"].(float64))
+	if !isValidRoomId(roomID) {
+		return fmt.Errorf("invalid roomID")
+	}
+	return h.userLocationUsecase.LeaveInRoom(userLocation, roomID)
 }
 
 func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[string]interface{}) error {
@@ -188,8 +192,9 @@ func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[
 }
 
 func (h *WebSocketHandler) disconnect(userLocation *model.UserLocation) error {
-	// TODO: 仮にLeaveInRoomをしているが、実際にはDisconnectInAllを使う
-	return h.userLocationUsecase.LeaveInRoom(userLocation)
+	// TODO: 仮にLeaveInAreaをしているが、実際にはDisconnectInAllを使う
+	log.Println("disconnect-disconnect-now")
+	return h.userLocationUsecase.LeaveInArea(userLocation)
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {
@@ -199,7 +204,11 @@ func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocati
 	}
 	msgPayload := &model.Message{Payload: msg}
 	// 特定のユーザーにメッセージを送信する(ここでルーム全員に送信するとブラウザ側でメモリエラーになる)
-	h.userLocationUsecase.SendMessageToSpecificUser(userLocation, msgPayload, toUserID)
+	err := h.userLocationUsecase.SendMessageToSpecificUser(userLocation, msgPayload, toUserID)
+	if err != nil {
+		log.Printf("handleSignalingMessage: Error sending message to specific user: %v", err)
+		return err
+	}
 	return nil
 }
 

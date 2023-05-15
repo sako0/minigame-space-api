@@ -220,6 +220,7 @@ func (uc *UserLocationUsecase) SendMessageToSpecificUser(userLocation *model.Use
 	msgPayload["fromUserID"] = userLocation.UserID
 	msgPayload["areaID"] = userLocation.AreaID
 	msgPayload["roomID"] = userLocation.RoomID
+	msgPayload["toUserID"] = targetUserID
 
 	targetUserLocation, ok := uc.inMemoryUserLocationRepo.Find(targetUserID)
 	if !ok {
@@ -257,25 +258,38 @@ func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) err
 	return uc.SendMessageToSameArea(userLocation, msg)
 }
 
-func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation) error {
-	userLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation, roomID uint) error {
+	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(roomID)
+	fmt.Println("LeaveInRoom-connectedUserLocations:", connectedUserLocations)
+	for _, otherClient := range connectedUserLocations {
+		fmt.Println("LeaveInRoom-otherClient.UserID:", otherClient.UserID)
+		if otherClient.UserID != userLocation.UserID {
+			leaveMsg := map[string]interface{}{
+				"type":       "leave-room",
+				"areaID":     userLocation.AreaID,
+				"roomID":     roomID,
+				"fromUserID": userLocation.UserID,
+				"toUserID":   otherClient.UserID,
+			}
+			msg := model.NewMessage(leaveMsg)
+			fmt.Println("LeaveInRoom-msg:", msg)
+			err := uc.SendMessageToSpecificUser(userLocation, msg, otherClient.UserID)
+			if err != nil {
+				return err
+			}
+
+		}
+	}
+	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return errors.New("user location not found")
-	}
+	err = uc.DisconnectUserLocation(userLocation)
+	if err != nil {
 
-	leaveMsg := map[string]interface{}{
-		"type":       "leave-room",
-		"areaID":     userLocation.AreaID,
-		"roomID":     userLocation.RoomID,
-		"fromUserID": userLocation.UserID,
+		return err
 	}
-	msg := model.NewMessage(leaveMsg)
-	uc.userLocationRepo.UpdateUserLocation(userLocation)
-	uc.DisconnectUserLocation(userLocation)
-	return uc.SendMessageToSameRoom(userLocation, msg)
+	return nil
 }
 
 // TODO: 仮にLeaveInRoomをしているが、実際にはDisconnectInAllを使う
