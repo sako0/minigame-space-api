@@ -20,9 +20,6 @@ func NewWebSocketHandler(userLocationUsecase usecase.UserLocationUsecase, upgrad
 	return &WebSocketHandler{userLocationUsecase: userLocationUsecase, upgrader: upgrader}
 }
 
-// websocketの接続を維持するためのping/pongの間隔
-var pongWait = 3600 * time.Second
-
 func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -31,17 +28,11 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 	defer conn.Close()
 
-	// websocketの接続を維持するためのping/pongの間隔を設定
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(pongWait))
-		return nil
-	})
-
 	userLocation := model.NewUserLocationByConn(conn)
 
 	defer func() {
 		// クリーンアップ処理
-		err := h.disconnect(userLocation)
+		err := h.userLocationUsecase.DisconnectInRoom(userLocation, userLocation.RoomID)
 		if err != nil {
 			log.Printf("Error disconnecting user: %v", err)
 		}
@@ -189,12 +180,6 @@ func (h *WebSocketHandler) handleMove(userLocation *model.UserLocation, msg map[
 	}
 
 	return nil
-}
-
-func (h *WebSocketHandler) disconnect(userLocation *model.UserLocation) error {
-	// TODO: 仮にLeaveInAreaをしているが、実際にはDisconnectInAllを使う
-	log.Println("disconnect-disconnect-now")
-	return h.userLocationUsecase.LeaveInArea(userLocation)
 }
 
 func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocation, msg map[string]interface{}) error {

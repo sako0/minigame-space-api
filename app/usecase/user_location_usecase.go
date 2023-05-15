@@ -260,9 +260,7 @@ func (uc *UserLocationUsecase) LeaveInArea(userLocation *model.UserLocation) err
 
 func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation, roomID uint) error {
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(roomID)
-	fmt.Println("LeaveInRoom-connectedUserLocations:", connectedUserLocations)
 	for _, otherClient := range connectedUserLocations {
-		fmt.Println("LeaveInRoom-otherClient.UserID:", otherClient.UserID)
 		if otherClient.UserID != userLocation.UserID {
 			leaveMsg := map[string]interface{}{
 				"type":       "leave-room",
@@ -272,7 +270,6 @@ func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation, roo
 				"toUserID":   otherClient.UserID,
 			}
 			msg := model.NewMessage(leaveMsg)
-			fmt.Println("LeaveInRoom-msg:", msg)
 			err := uc.SendMessageToSpecificUser(userLocation, msg, otherClient.UserID)
 			if err != nil {
 				return err
@@ -292,23 +289,31 @@ func (uc *UserLocationUsecase) LeaveInRoom(userLocation *model.UserLocation, roo
 	return nil
 }
 
-// TODO: 仮にLeaveInRoomをしているが、実際にはDisconnectInAllを使う
-func (uc *UserLocationUsecase) DisconnectInAll(userLocation *model.UserLocation) error {
-	userLocation, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
+func (uc *UserLocationUsecase) DisconnectInRoom(userLocation *model.UserLocation, roomID uint) error {
+	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByRoomId(roomID)
+	for _, otherClient := range connectedUserLocations {
+		if otherClient.UserID != userLocation.UserID {
+			leaveMsg := map[string]interface{}{
+				"type":       "disconnect-room",
+				"areaID":     userLocation.AreaID,
+				"roomID":     roomID,
+				"fromUserID": userLocation.UserID,
+			}
+			msg := model.NewMessage(leaveMsg)
+			err := uc.SendMessageToSpecificUser(userLocation, msg, otherClient.UserID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	err := uc.userLocationRepo.UpdateUserLocation(userLocation)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return errors.New("user location not found")
+	err = uc.DisconnectUserLocation(userLocation)
+	if err != nil {
+
+		return err
 	}
-	disconnectMsg := map[string]interface{}{
-		"type":       "disconnect",
-		"areaID":     userLocation.AreaID,
-		"roomID":     userLocation.RoomID,
-		"fromUserID": userLocation.UserID,
-	}
-	msg := model.NewMessage(disconnectMsg)
-	uc.DisconnectUserLocation(userLocation)
-	// エリア内にルームがあるので、エリア内のユーザーに送信すれば良い
-	return uc.SendMessageToSameArea(userLocation, msg)
+	return nil
 }
