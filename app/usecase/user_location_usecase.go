@@ -104,9 +104,7 @@ func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocat
 
 	connectedUserIds := []uint{}
 	for _, otherUserLocation := range connectedUserLocations {
-		if otherUserLocation.UserID != userLocation.UserID {
-			connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
-		}
+		connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
 	}
 	location, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
@@ -185,13 +183,11 @@ func (uc *UserLocationUsecase) SendMessageToSameArea(userLocation *model.UserLoc
 	msgPayload["areaID"] = userLocation.AreaID
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByAreaId(userLocation.AreaID)
 	for _, otherClient := range connectedUserLocations {
-		if otherClient.UserID != userLocation.UserID {
-			err := otherClient.Conn.WriteJSON(msgPayload)
-			if err != nil {
-				log.Printf("Error sending message to client: %v", err)
-				uc.DisconnectUserLocation(otherClient)
-				return err
-			}
+		err := otherClient.Conn.WriteJSON(msgPayload)
+		if err != nil {
+			log.Printf("Error sending message to client: %v", err)
+			uc.DisconnectUserLocation(otherClient)
+			return err
 		}
 	}
 	return nil
