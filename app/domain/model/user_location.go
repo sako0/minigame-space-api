@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -24,4 +25,20 @@ type UserLocation struct {
 
 func NewUserLocationByConn(conn *websocket.Conn) *UserLocation {
 	return &UserLocation{Conn: conn}
+}
+
+func (u *UserLocation) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		UserID uint `json:"userID"`
+		AreaID uint `json:"areaID"`
+		RoomID uint `json:"roomID"`
+		XAxis  int  `json:"xAxis"`
+		YAxis  int  `json:"yAxis"`
+	}{
+		UserID: u.UserID,
+		AreaID: u.AreaID,
+		RoomID: u.RoomID,
+		XAxis:  u.XAxis,
+		YAxis:  u.YAxis,
+	})
 }

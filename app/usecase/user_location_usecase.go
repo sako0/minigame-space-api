@@ -2,6 +2,7 @@
 package usecase
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -101,11 +102,29 @@ func (uc *UserLocationUsecase) DisconnectUserLocation(userLocation *model.UserLo
 
 func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocation) error {
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByAreaId(userLocation.AreaID)
-
-	connectedUserIds := []uint{}
+	userLocations := []map[string]interface{}{}
 	for _, otherUserLocation := range connectedUserLocations {
-		connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
+		userLocation, ok, err := uc.userLocationRepo.GetUserLocation(otherUserLocation.UserID)
+		if !ok {
+			return errors.New("userLocation is not exist")
+		}
+		if err != nil {
+			uc.DisconnectUserLocation(userLocation)
+			return err
+		}
+		userLocationJSON, err := userLocation.MarshalJSON()
+		if err != nil {
+			return err
+
+		}
+		var userLocationMap map[string]interface{}
+		err = json.Unmarshal(userLocationJSON, &userLocationMap)
+		if err != nil {
+			return err
+		}
+		userLocations = append(userLocations, userLocationMap)
 	}
+
 	location, ok, err := uc.userLocationRepo.GetUserLocation(userLocation.UserID)
 	if err != nil {
 		uc.DisconnectUserLocation(userLocation)
@@ -116,12 +135,12 @@ func (uc *UserLocationUsecase) SendAreaJoinedEvent(userLocation *model.UserLocat
 	}
 
 	areaJoinedMsg := map[string]interface{}{
-		"areaID":           userLocation.AreaID,
-		"type":             "joined-area",
-		"connectedUserIds": connectedUserIds,
-		"fromUserID":       userLocation.UserID,
-		"xAxis":            location.XAxis,
-		"yAxis":            location.YAxis,
+		"areaID":        userLocation.AreaID,
+		"type":          "joined-area",
+		"userLocations": userLocations,
+		"fromUserID":    userLocation.UserID,
+		"xAxis":         location.XAxis,
+		"yAxis":         location.YAxis,
 	}
 	msg := model.NewMessage(areaJoinedMsg)
 	return uc.SendMessageToSameArea(userLocation, msg)
