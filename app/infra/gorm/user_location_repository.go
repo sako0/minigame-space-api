@@ -40,7 +40,7 @@ func (r *UserLocationRepository) AddUserLocation(userLocation *model.UserLocatio
 }
 
 func (r *UserLocationRepository) RemoveUserLocation(userId uint) error {
-	result := r.db.Delete(&model.UserLocation{}, userId)
+	result := r.db.Unscoped().Delete(&model.UserLocation{}, fmt.Sprintf("user_id = %d", userId))
 	if result.Error != nil {
 		return fmt.Errorf("RemoveUserLocation: %v", result.Error)
 	}
