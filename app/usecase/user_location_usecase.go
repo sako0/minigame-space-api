@@ -141,7 +141,7 @@ func (uc *UserLocationUsecase) MoveInArea(userLocation *model.UserLocation, xAxi
 		return err
 	}
 	uc.inMemoryUserLocationRepo.Store(userLocation)
-	otherUserLocations, err := uc.GetSerializedConnectedUserLocationsWithoutFromUserID(userLocation.AreaID, userLocation.UserID)
+	userLocations, err := uc.GetSerializedConnectedUserLocations(userLocation.AreaID)
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (uc *UserLocationUsecase) MoveInArea(userLocation *model.UserLocation, xAxi
 		"type":          "move",
 		"areaID":        userLocation.AreaID,
 		"fromUserID":    userLocation.UserID,
-		"userLocations": otherUserLocations,
+		"userLocations": userLocations,
 		"xAxis":         userLocation.XAxis,
 		"yAxis":         userLocation.YAxis,
 	}
@@ -308,7 +308,6 @@ func (uc *UserLocationUsecase) GetSerializedConnectedUserLocations(ariaID uint) 
 	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByAreaId(ariaID)
 	userLocations := []map[string]interface{}{}
 	for _, otherUserLocation := range connectedUserLocations {
-
 		userLocation, exists, err := uc.userLocationRepo.GetUserLocation(otherUserLocation.UserID)
 
 		if err != nil {
@@ -334,41 +333,6 @@ func (uc *UserLocationUsecase) GetSerializedConnectedUserLocations(ariaID uint) 
 			return nil, fmt.Errorf("failed to unmarshal user location from JSON: %w", err)
 		}
 		userLocations = append(userLocations, userLocationMap)
-	}
-	return userLocations, nil
-}
-
-func (uc *UserLocationUsecase) GetSerializedConnectedUserLocationsWithoutFromUserID(ariaID uint, fromUserID uint) ([]map[string]interface{}, error) {
-	connectedUserLocations := uc.inMemoryUserLocationRepo.GetAllUserLocationsByAreaId(ariaID)
-	userLocations := []map[string]interface{}{}
-	for _, otherUserLocation := range connectedUserLocations {
-		if otherUserLocation.UserID != fromUserID {
-			userLocation, exists, err := uc.userLocationRepo.GetUserLocation(otherUserLocation.UserID)
-
-			if err != nil {
-				uc.DisconnectUserLocation(userLocation)
-				return nil, err
-			}
-			if !exists {
-				log.Printf("user location does not exist for user ID: %d", otherUserLocation.UserID)
-				err := uc.userLocationRepo.AddUserLocation(userLocation)
-				if err != nil {
-					uc.DisconnectUserLocation(userLocation)
-					return nil, fmt.Errorf("failed to add user location: %w", err)
-				}
-			}
-			userLocationJSON, err := userLocation.MarshalJSON()
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal user location from JSON: %w", err)
-
-			}
-			var userLocationMap map[string]interface{}
-			err = json.Unmarshal(userLocationJSON, &userLocationMap)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal user location from JSON: %w", err)
-			}
-			userLocations = append(userLocations, userLocationMap)
-		}
 	}
 	return userLocations, nil
 }
