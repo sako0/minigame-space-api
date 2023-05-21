@@ -8,13 +8,11 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserLocation struct {
+type UserGameLocation struct {
 	gorm.Model
 	UserID uint
 	User   *User
-	AreaID uint `gorm:"default:null"`
-	Area   *Area
-	RoomID uint `gorm:"default:null"`
+	RoomID uint
 	Room   *Room
 	XAxis  int
 	YAxis  int
@@ -22,20 +20,18 @@ type UserLocation struct {
 	Mutex  sync.Mutex      `gorm:"-"`
 }
 
-func NewUserLocationByConn(conn *websocket.Conn) *UserLocation {
-	return &UserLocation{Conn: conn}
+func NewUserGameLocationByConn(conn *websocket.Conn) *UserGameLocation {
+	return &UserGameLocation{Conn: conn}
 }
 
-func (u *UserLocation) MarshalJSON() ([]byte, error) {
+func (u *UserGameLocation) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		UserID uint `json:"userID"`
-		AreaID uint `json:"areaID"`
 		RoomID uint `json:"roomID"`
 		XAxis  int  `json:"xAxis"`
 		YAxis  int  `json:"yAxis"`
 	}{
 		UserID: u.UserID,
-		AreaID: u.AreaID,
 		RoomID: u.RoomID,
 		XAxis:  u.XAxis,
 		YAxis:  u.YAxis,

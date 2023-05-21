@@ -35,14 +35,22 @@ func main() {
 	}
 
 	userLocationRepo := gorm.NewUserLocationRepository(db)
+	userGameLocation := gorm.NewUserGameLocationRepository(db)
 	inMemoryUserLocationRepo := in_memory.NewInMemoryUserLocationRepository()
+	inMemoryUserGameLocationRepo := in_memory.NewInMemoryUserGameLocationRepository()
 	roomUsecase := usecase.NewUserLocationUsecase(userLocationRepo, inMemoryUserLocationRepo)
+	userGameLocationUsecase := usecase.NewUserGameLocationUsecase(userGameLocation, inMemoryUserGameLocationRepo)
 	wsHandler := handler.NewWebSocketHandler(*roomUsecase, upgrader)
+	wsGameHandler := handler.NewUserGameLocationHandler(*userGameLocationUsecase, upgrader)
 
 	e := echo.New()
 
 	e.GET("/ws", func(c echo.Context) error {
 		wsHandler.HandleConnections(c.Response().Writer, c.Request())
+		return nil
+	})
+	e.GET("/game", func(c echo.Context) error {
+		wsGameHandler.HandleConnections(c.Response().Writer, c.Request())
 		return nil
 	})
 

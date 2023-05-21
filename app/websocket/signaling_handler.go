@@ -53,8 +53,6 @@ func (h *WebSocketHandler) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-var retryInterval = 500 * time.Millisecond
-
 func (h *WebSocketHandler) readMessage(conn *websocket.Conn) (map[string]interface{}, error) {
 	var msg = map[string]interface{}{}
 	err := conn.ReadJSON(&msg)
@@ -195,21 +193,4 @@ func (h *WebSocketHandler) handleSignalingMessage(userLocation *model.UserLocati
 		return err
 	}
 	return nil
-}
-
-// ヘルパー関数
-func isValidRoomId(roomId uint) bool {
-	return roomId != 0
-}
-
-func isValidUserId(fromUserID uint) bool {
-	return fromUserID != 0
-}
-
-// 一時的なエラーかどうかを判定する
-func isTemporary(err error) bool {
-	te, ok := err.(interface {
-		Temporary() bool
-	})
-	return ok && te.Temporary()
 }
