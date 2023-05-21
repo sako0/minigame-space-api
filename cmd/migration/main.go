@@ -24,6 +24,7 @@ func main() {
 		&model.Room{},
 		&model.User{},
 		&model.UserLocation{},
+		&model.UserGameLocation{},
 		&model.RoomType{},
 		&model.Area{},
 	)
@@ -37,6 +38,7 @@ func main() {
 		&model.Room{},
 		&model.User{},
 		&model.UserLocation{},
+		&model.UserGameLocation{},
 		&model.RoomType{},
 		&model.Area{},
 	)
