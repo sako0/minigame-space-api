@@ -73,6 +73,8 @@ func (h *UserGameLocationHandler) processMessage(userGameLocation *model.UserGam
 	switch msg["type"].(string) {
 	case "join-game":
 		err = h.handleJoinGame(userGameLocation, msg)
+	case "join-audio":
+		err = h.handleJoinAudio(userGameLocation, msg)
 	case "leave-game":
 		err = h.handleLeaveGame(userGameLocation, msg)
 	case "move":
@@ -110,13 +112,38 @@ func (h *UserGameLocationHandler) handleJoinGame(userGameLocation *model.UserGam
 
 	err := h.userGameLocationUsecase.ConnectUserGameLocation(userGameLocation)
 	if err != nil {
-		log.Printf("Error connecting client to game: %v", err)
-		return err
+		return fmt.Errorf("error connecting client to game: %v", err)
 	}
 
 	err = h.userGameLocationUsecase.SendGameJoinedEvent(userGameLocation)
 	if err != nil {
 		log.Printf("handleJoinGame: Error joining game: %v", err)
+		return err
+	}
+	return nil
+}
+func (h *UserGameLocationHandler) handleJoinAudio(userGameLocation *model.UserGameLocation, msg map[string]interface{}) error {
+	roomId := uint(msg["roomID"].(float64))
+	if !isValidRoomId(roomId) {
+		return fmt.Errorf("invalid roomID")
+	}
+	userGameLocation.RoomID = roomId
+
+	fromUserID := uint(msg["fromUserID"].(float64))
+	if !isValidUserId(fromUserID) {
+		return fmt.Errorf("invalid fromUserID")
+	}
+	userGameLocation.UserID = fromUserID
+
+	err := h.userGameLocationUsecase.ConnectUserGameLocation(userGameLocation)
+	if err != nil {
+		return fmt.Errorf("error connecting client to audio: %v", err)
+	}
+
+	err = h.userGameLocationUsecase.SendAudioJoinedEvent(userGameLocation)
+	if err != nil {
+		log.Printf("handleJoinAudio: Error joining audio: %v", err)
+		h.userGameLocationUsecase.DisconnectUserGameLocation(userGameLocation)
 		return err
 	}
 	return nil

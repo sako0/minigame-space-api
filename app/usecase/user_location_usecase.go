@@ -124,7 +124,7 @@ func (uc *UserLocationUsecase) SendRoomJoinedEvent(userLocation *model.UserLocat
 		connectedUserIds = append(connectedUserIds, otherUserLocation.UserID)
 	}
 	roomJoinedMsg := map[string]interface{}{
-		"type":             "client-joined",
+		"type":             "join-audio",
 		"connectedUserIds": connectedUserIds,
 		"fromUserID":       userLocation.UserID,
 	}

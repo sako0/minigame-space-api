@@ -74,7 +74,7 @@ func (ugc *UserGameLocationUsecase) SendGameJoinedEvent(userGameLocation *model.
 		return fmt.Errorf("failed to get serialized connected user locations: %w", err)
 	}
 	roomJoinedMsg := map[string]interface{}{
-		"type":              "client-joined",
+		"type":              "join-game",
 		"connectedUserIds":  connectedUserIds,
 		"fromUserID":        userGameLocation.UserID,
 		"xAxis":             userGameLocation.XAxis,
@@ -86,13 +86,48 @@ func (ugc *UserGameLocationUsecase) SendGameJoinedEvent(userGameLocation *model.
 	return ugc.SendMessageToSameRoom(userGameLocation, msg)
 }
 
+func (ugc *UserGameLocationUsecase) SendAudioJoinedEvent(userGameLocation *model.UserGameLocation) error {
+	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(userGameLocation.RoomID)
+	connectedUserIds := []uint{}
+	for _, otherUserGameLocation := range connectedUserGameLocations {
+		connectedUserIds = append(connectedUserIds, otherUserGameLocation.UserID)
+	}
+	roomJoinedMsg := map[string]interface{}{
+		"type":             "join-audio",
+		"connectedUserIds": connectedUserIds,
+		"fromUserID":       userGameLocation.UserID,
+		"roomID":           userGameLocation.RoomID,
+	}
+	msg := model.NewMessage(roomJoinedMsg)
+	return ugc.SendMessageToSameRoomWithoutMe(userGameLocation, msg)
+}
+
+func (ugc *UserGameLocationUsecase) SendMessageToSameRoomWithoutMe(userGameLocation *model.UserGameLocation, msg *model.Message) error {
+	msgPayload := msg.Payload
+	msgPayload["fromUserID"] = userGameLocation.UserID
+	msgPayload["roomID"] = userGameLocation.RoomID
+	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(userGameLocation.RoomID)
+	for _, otherClient := range connectedUserGameLocations {
+		if otherClient.UserID != userGameLocation.UserID {
+			otherClient.Mutex.Lock()
+			defer otherClient.Mutex.Unlock()
+			err := otherClient.Conn.WriteJSON(msgPayload)
+			if err != nil {
+				log.Printf("Error sending message to client: %v", err)
+				ugc.DisconnectUserGameLocation(otherClient)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (ugc *UserGameLocationUsecase) SendMessageToSameRoom(userGameLocation *model.UserGameLocation, msg *model.Message) error {
 	msgPayload := msg.Payload
 	msgPayload["fromUserID"] = userGameLocation.UserID
 	msgPayload["roomID"] = userGameLocation.RoomID
 	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(userGameLocation.RoomID)
 	for _, otherClient := range connectedUserGameLocations {
-		// if otherClient.UserID != userGameLocation.UserID {
 		otherClient.Mutex.Lock()
 		defer otherClient.Mutex.Unlock()
 		err := otherClient.Conn.WriteJSON(msgPayload)
@@ -101,10 +136,11 @@ func (ugc *UserGameLocationUsecase) SendMessageToSameRoom(userGameLocation *mode
 			ugc.DisconnectUserGameLocation(otherClient)
 			return err
 		}
-		// }
+
 	}
 	return nil
 }
+
 func (ugc *UserGameLocationUsecase) SendMessageToSpecificUser(userGameLocation *model.UserGameLocation, msg *model.Message, targetUserID uint) error {
 	msgPayload := msg.Payload
 	msgPayload["fromUserID"] = userGameLocation.UserID

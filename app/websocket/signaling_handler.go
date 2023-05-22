@@ -73,11 +73,11 @@ func (h *WebSocketHandler) processMessage(client *model.UserLocation, msg map[st
 	switch msg["type"].(string) {
 	case "join-area":
 		err = h.handleJoinArea(client, msg)
-	case "join-room":
+	case "join-audio":
 		err = h.handleJoinRoom(client, msg)
 	case "leave-area":
 		err = h.handleLeaveArea(client, msg)
-	case "leave-room":
+	case "leave-audio":
 		err = h.handleLeaveRoom(client, msg)
 	case "move":
 		err = h.handleMove(client, msg)
