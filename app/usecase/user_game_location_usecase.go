@@ -74,13 +74,29 @@ func (ugc *UserGameLocationUsecase) SendGameJoinedEvent(userGameLocation *model.
 		return fmt.Errorf("failed to get serialized connected user locations: %w", err)
 	}
 	roomJoinedMsg := map[string]interface{}{
-		"type":              "client-joined",
+		"type":              "join-game",
 		"connectedUserIds":  connectedUserIds,
 		"fromUserID":        userGameLocation.UserID,
 		"xAxis":             userGameLocation.XAxis,
 		"yAxis":             userGameLocation.YAxis,
 		"roomID":            userGameLocation.RoomID,
 		"userGameLocations": userLocations,
+	}
+	msg := model.NewMessage(roomJoinedMsg)
+	return ugc.SendMessageToSameRoom(userGameLocation, msg)
+}
+
+func (ugc *UserGameLocationUsecase) SendAudioJoinedEvent(userGameLocation *model.UserGameLocation) error {
+	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(userGameLocation.RoomID)
+	connectedUserIds := []uint{}
+	for _, otherUserGameLocation := range connectedUserGameLocations {
+		connectedUserIds = append(connectedUserIds, otherUserGameLocation.UserID)
+	}
+	roomJoinedMsg := map[string]interface{}{
+		"type":             "join-audio",
+		"connectedUserIds": connectedUserIds,
+		"fromUserID":       userGameLocation.UserID,
+		"roomID":           userGameLocation.RoomID,
 	}
 	msg := model.NewMessage(roomJoinedMsg)
 	return ugc.SendMessageToSameRoom(userGameLocation, msg)
