@@ -110,7 +110,12 @@ func (h *UserGameLocationHandler) handleJoinGame(userGameLocation *model.UserGam
 
 	userGameLocation.UserID = fromUserID
 
-	err := h.userGameLocationUsecase.SendGameJoinedEvent(userGameLocation)
+	err := h.userGameLocationUsecase.ConnectUserGameLocation(userGameLocation)
+	if err != nil {
+		return fmt.Errorf("error connecting client to game: %v", err)
+	}
+
+	err = h.userGameLocationUsecase.SendGameJoinedEvent(userGameLocation)
 	if err != nil {
 		log.Printf("handleJoinGame: Error joining game: %v", err)
 		return err

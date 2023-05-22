@@ -108,16 +108,16 @@ func (ugc *UserGameLocationUsecase) SendMessageToSameRoom(userGameLocation *mode
 	msgPayload["roomID"] = userGameLocation.RoomID
 	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(userGameLocation.RoomID)
 	for _, otherClient := range connectedUserGameLocations {
-		// if otherClient.UserID != userGameLocation.UserID {
-		otherClient.Mutex.Lock()
-		defer otherClient.Mutex.Unlock()
-		err := otherClient.Conn.WriteJSON(msgPayload)
-		if err != nil {
-			log.Printf("Error sending message to client: %v", err)
-			ugc.DisconnectUserGameLocation(otherClient)
-			return err
+		if otherClient.UserID != userGameLocation.UserID {
+			otherClient.Mutex.Lock()
+			defer otherClient.Mutex.Unlock()
+			err := otherClient.Conn.WriteJSON(msgPayload)
+			if err != nil {
+				log.Printf("Error sending message to client: %v", err)
+				ugc.DisconnectUserGameLocation(otherClient)
+				return err
+			}
 		}
-		// }
 	}
 	return nil
 }
