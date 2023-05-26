@@ -36,6 +36,10 @@ func (h *UserGameLocationHandler) HandleConnections(w http.ResponseWriter, r *ht
 		if err != nil {
 			log.Printf("Error disconnecting user: %v", err)
 		}
+		err = h.userGameLocationUsecase.DisconnectInAudio(userGameLocation, userGameLocation.RoomID)
+		if err != nil {
+			log.Printf("Error disconnecting user audio: %v", err)
+		}
 	}()
 	for {
 		msg, err := h.readMessage(conn)
@@ -77,6 +81,8 @@ func (h *UserGameLocationHandler) processMessage(userGameLocation *model.UserGam
 		err = h.handleJoinAudio(userGameLocation, msg)
 	case "leave-game":
 		err = h.handleLeaveGame(userGameLocation, msg)
+	case "leave-audio":
+		err = h.handleLeaveAudio(userGameLocation, msg)
 	case "move":
 		err = h.handleMoveGame(userGameLocation, msg)
 	case "offer", "answer", "ice-candidate":
@@ -143,7 +149,6 @@ func (h *UserGameLocationHandler) handleJoinAudio(userGameLocation *model.UserGa
 	err = h.userGameLocationUsecase.SendAudioJoinedEvent(userGameLocation)
 	if err != nil {
 		log.Printf("handleJoinAudio: Error joining audio: %v", err)
-		h.userGameLocationUsecase.DisconnectUserGameLocation(userGameLocation)
 		return err
 	}
 	return nil
@@ -153,6 +158,28 @@ func (h *UserGameLocationHandler) handleLeaveGame(userGameLocation *model.UserGa
 	err := h.userGameLocationUsecase.LeaveInGame(userGameLocation, userGameLocation.RoomID)
 	if err != nil {
 		log.Printf("handleLeaveGame: Error leaving game: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (h *UserGameLocationHandler) handleLeaveAudio(userGameLocation *model.UserGameLocation, msg map[string]interface{}) error {
+	roomId := uint(msg["roomID"].(float64))
+	if !isValidRoomId(roomId) {
+		return fmt.Errorf("invalid roomID")
+	}
+	userGameLocation.RoomID = roomId
+
+	fromUserID := uint(msg["fromUserID"].(float64))
+	if !isValidUserId(fromUserID) {
+		return fmt.Errorf("invalid fromUserID")
+	}
+	userGameLocation.UserID = fromUserID
+
+	err := h.userGameLocationUsecase.LeaveInAudio(userGameLocation, userGameLocation.RoomID)
+	if err != nil {
+		log.Printf("handleLeaveAudio: Error leaving audio: %v", err)
 		return err
 	}
 

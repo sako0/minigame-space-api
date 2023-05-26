@@ -28,6 +28,7 @@ func (ugc *UserGameLocationUsecase) ConnectUserGameLocation(userGameLocation *mo
 	_, exists, err := ugc.userGameLocationRepo.GetUserGameLocation(userGameLocation.UserID)
 	if err != nil {
 		ugc.DisconnectUserGameLocation(userGameLocation)
+		log.Println("failed to get userGameLocation")
 		return err
 	}
 
@@ -58,6 +59,7 @@ func (ugc *UserGameLocationUsecase) ConnectUserGameLocation(userGameLocation *mo
 }
 
 func (ugc *UserGameLocationUsecase) DisconnectUserGameLocation(userGameLocation *model.UserGameLocation) error {
+	log.Println("disconnect userGameLocation:", userGameLocation.UserID)
 	ugc.inMemoryUserGameLocationRepo.Delete(userGameLocation.UserID)
 
 	return nil
@@ -203,9 +205,60 @@ func (ugc *UserGameLocationUsecase) LeaveInGame(userGameLocation *model.UserGame
 			msg := model.NewMessage(leaveMsg)
 			err := ugc.SendMessageToSpecificUser(userGameLocation, msg, otherClient.UserID)
 			if err != nil {
+				log.Printf("Error sending message to client: %v", err)
 				return err
 			}
 
+		}
+	}
+	err := ugc.userGameLocationRepo.UpdateUserGameLocation(userGameLocation)
+	if err != nil {
+		return err
+	}
+	err = ugc.DisconnectUserGameLocation(userGameLocation)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ugc *UserGameLocationUsecase) LeaveInAudio(userGameLocationUsecase *model.UserGameLocation, roomID uint) error {
+	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(roomID)
+	for _, otherClient := range connectedUserGameLocations {
+		if otherClient.UserID != userGameLocationUsecase.UserID {
+			leaveMsg := map[string]interface{}{
+				"type":       "leave-audio",
+				"roomID":     roomID,
+				"fromUserID": userGameLocationUsecase.UserID,
+				"toUserID":   otherClient.UserID,
+			}
+			msg := model.NewMessage(leaveMsg)
+			err := ugc.SendMessageToSpecificUser(userGameLocationUsecase, msg, otherClient.UserID)
+			if err != nil {
+				log.Printf("Error sending message to client: %v", err)
+				return err
+			}
+
+		}
+	}
+	return nil
+}
+
+func (ugc *UserGameLocationUsecase) DisconnectInGame(userGameLocation *model.UserGameLocation, roomID uint) error {
+	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(roomID)
+	for _, otherClient := range connectedUserGameLocations {
+		if otherClient.UserID != userGameLocation.UserID {
+			leaveMsg := map[string]interface{}{
+				"type":       "disconnect-game",
+				"roomID":     roomID,
+				"fromUserID": userGameLocation.UserID,
+				"toUserID":   otherClient.UserID,
+			}
+			msg := model.NewMessage(leaveMsg)
+			err := ugc.SendMessageToSpecificUser(userGameLocation, msg, otherClient.UserID)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	err := ugc.userGameLocationRepo.UpdateUserGameLocation(userGameLocation)
@@ -220,14 +273,15 @@ func (ugc *UserGameLocationUsecase) LeaveInGame(userGameLocation *model.UserGame
 	return nil
 }
 
-func (ugc *UserGameLocationUsecase) DisconnectInGame(userGameLocation *model.UserGameLocation, roomID uint) error {
+func (ugc *UserGameLocationUsecase) DisconnectInAudio(userGameLocation *model.UserGameLocation, roomID uint) error {
 	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(roomID)
 	for _, otherClient := range connectedUserGameLocations {
 		if otherClient.UserID != userGameLocation.UserID {
 			leaveMsg := map[string]interface{}{
-				"type":       "disconnect-game",
+				"type":       "disconnect-audio",
 				"roomID":     roomID,
 				"fromUserID": userGameLocation.UserID,
+				"toUserID":   otherClient.UserID,
 			}
 			msg := model.NewMessage(leaveMsg)
 			err := ugc.SendMessageToSpecificUser(userGameLocation, msg, otherClient.UserID)
