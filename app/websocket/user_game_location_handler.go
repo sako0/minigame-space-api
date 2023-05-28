@@ -32,14 +32,7 @@ func (h *UserGameLocationHandler) HandleConnections(w http.ResponseWriter, r *ht
 
 	defer func() {
 		// クリーンアップ処理
-		err := h.userGameLocationUsecase.DisconnectInGame(userGameLocation, userGameLocation.RoomID)
-		if err != nil {
-			log.Printf("Error disconnecting user: %v", err)
-		}
-		err = h.userGameLocationUsecase.DisconnectInAudio(userGameLocation, userGameLocation.RoomID)
-		if err != nil {
-			log.Printf("Error disconnecting user audio: %v", err)
-		}
+		h.cleanUp(userGameLocation)
 	}()
 	for {
 		msg, err := h.readMessage(conn)
@@ -87,6 +80,8 @@ func (h *UserGameLocationHandler) processMessage(userGameLocation *model.UserGam
 		err = h.handleMoveGame(userGameLocation, msg)
 	case "offer", "answer", "ice-candidate":
 		err = h.handleSignalingMessage(userGameLocation, msg)
+	case "ping":
+		err = h.handlePing(userGameLocation, msg)
 	default:
 		err = fmt.Errorf("unknown message type")
 	}
@@ -222,4 +217,26 @@ func (h *UserGameLocationHandler) handleSignalingMessage(userGameLocation *model
 		return err
 	}
 	return nil
+}
+
+func (h UserGameLocationHandler) handlePing(userGameLocation *model.UserGameLocation, msg map[string]interface{}) error {
+	// ユーザーの接続状態を確認する
+	err := h.userGameLocationUsecase.PingUserGameLocation(userGameLocation)
+	if err != nil {
+		log.Printf("handlePing: Error pinging user: %v", err)
+		h.cleanUp(userGameLocation)
+		return err
+	}
+	return nil
+}
+
+func (h UserGameLocationHandler) cleanUp(userGameLocation *model.UserGameLocation) {
+	err := h.userGameLocationUsecase.LeaveInGame(userGameLocation, userGameLocation.RoomID)
+	if err != nil {
+		log.Printf("cleanUp: Error leaving game: %v", err)
+	}
+	err = h.userGameLocationUsecase.LeaveInAudio(userGameLocation, userGameLocation.RoomID)
+	if err != nil {
+		log.Printf("cleanUp: Error leaving audio: %v", err)
+	}
 }
