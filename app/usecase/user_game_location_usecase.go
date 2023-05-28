@@ -59,7 +59,6 @@ func (ugc *UserGameLocationUsecase) ConnectUserGameLocation(userGameLocation *mo
 }
 
 func (ugc *UserGameLocationUsecase) DisconnectUserGameLocation(userGameLocation *model.UserGameLocation) error {
-	log.Println("disconnect userGameLocation:", userGameLocation.UserID)
 	ugc.inMemoryUserGameLocationRepo.Delete(userGameLocation.UserID)
 
 	return nil
@@ -274,22 +273,7 @@ func (ugc *UserGameLocationUsecase) DisconnectInGame(userGameLocation *model.Use
 }
 
 func (ugc *UserGameLocationUsecase) DisconnectInAudio(userGameLocation *model.UserGameLocation, roomID uint) error {
-	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(roomID)
-	for _, otherClient := range connectedUserGameLocations {
-		if otherClient.UserID != userGameLocation.UserID {
-			leaveMsg := map[string]interface{}{
-				"type":       "disconnect-audio",
-				"roomID":     roomID,
-				"fromUserID": userGameLocation.UserID,
-				"toUserID":   otherClient.UserID,
-			}
-			msg := model.NewMessage(leaveMsg)
-			err := ugc.SendMessageToSpecificUser(userGameLocation, msg, otherClient.UserID)
-			if err != nil {
-				return err
-			}
-		}
-	}
+
 	err := ugc.userGameLocationRepo.UpdateUserGameLocation(userGameLocation)
 	if err != nil {
 		return err
@@ -297,6 +281,16 @@ func (ugc *UserGameLocationUsecase) DisconnectInAudio(userGameLocation *model.Us
 	err = ugc.DisconnectUserGameLocation(userGameLocation)
 	if err != nil {
 
+		return err
+	}
+	disconnectMsg := map[string]interface{}{
+		"type":       "disconnect-audio",
+		"roomID":     roomID,
+		"fromUserID": userGameLocation.UserID,
+	}
+	msg := model.NewMessage(disconnectMsg)
+	err = ugc.SendMessageToSameRoom(userGameLocation, msg)
+	if err != nil {
 		return err
 	}
 	return nil
@@ -336,18 +330,11 @@ func (ugc *UserGameLocationUsecase) GetSerializedConnectedUserGameLocations(room
 }
 
 func (ugc *UserGameLocationUsecase) PingUserGameLocation(userGameLocation *model.UserGameLocation) error {
-	userGameLocations, err := ugc.GetSerializedConnectedUserGameLocations(userGameLocation.RoomID)
-	if err != nil {
-		return err
-	}
 	pongMsg := map[string]interface{}{
-		"type":              "pong",
-		"fromUserID":        userGameLocation.UserID,
-		"roomID":            userGameLocation.RoomID,
-		"userGameLocations": userGameLocations,
+		"type": "pong",
 	}
 	msg := model.NewMessage(pongMsg)
-	err = ugc.SendMessageToSameRoom(userGameLocation, msg)
+	err := ugc.SendMessageToSpecificUser(userGameLocation, msg, userGameLocation.UserID)
 	if err != nil {
 		return err
 	}
