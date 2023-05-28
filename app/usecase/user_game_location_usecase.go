@@ -334,3 +334,22 @@ func (ugc *UserGameLocationUsecase) GetSerializedConnectedUserGameLocations(room
 	}
 	return userGameLocations, nil
 }
+
+func (ugc *UserGameLocationUsecase) PingUserGameLocation(userGameLocation *model.UserGameLocation) error {
+	userGameLocations, err := ugc.GetSerializedConnectedUserGameLocations(userGameLocation.RoomID)
+	if err != nil {
+		return err
+	}
+	pongMsg := map[string]interface{}{
+		"type":              "pong",
+		"fromUserID":        userGameLocation.UserID,
+		"roomID":            userGameLocation.RoomID,
+		"userGameLocations": userGameLocations,
+	}
+	msg := model.NewMessage(pongMsg)
+	err = ugc.SendMessageToSameRoom(userGameLocation, msg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
