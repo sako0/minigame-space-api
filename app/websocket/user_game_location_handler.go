@@ -20,7 +20,7 @@ func NewUserGameLocationHandler(userGameLocationUsecase usecase.UserGameLocation
 	return &UserGameLocationHandler{userGameLocationUsecase: userGameLocationUsecase, upgrader: upgrader}
 }
 
-const PingTimeout = 10 * time.Second
+const PingTimeout = 20 * time.Second
 
 func (h *UserGameLocationHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
