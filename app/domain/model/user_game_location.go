@@ -16,6 +16,7 @@ type UserGameLocation struct {
 	Room   *Room
 	XAxis  int
 	YAxis  int
+	Status string
 	Conn   *websocket.Conn `gorm:"-"`
 	Mutex  sync.Mutex      `gorm:"-"`
 }
