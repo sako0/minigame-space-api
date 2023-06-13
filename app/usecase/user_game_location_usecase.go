@@ -218,6 +218,11 @@ func (ugc *UserGameLocationUsecase) LeaveInGame(userGameLocation *model.UserGame
 	if err != nil {
 		return err
 	}
+	err = ugc.userGameLocationRepo.RemoveUserGameLocation(userGameLocation.UserID)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -267,6 +272,10 @@ func (ugc *UserGameLocationUsecase) DisconnectInGame(userGameLocation *model.Use
 	err = ugc.DisconnectUserGameLocation(userGameLocation)
 	if err != nil {
 
+		return err
+	}
+	err = ugc.userGameLocationRepo.RemoveUserGameLocation(userGameLocation.UserID)
+	if err != nil {
 		return err
 	}
 	return nil
