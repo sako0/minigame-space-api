@@ -65,6 +65,11 @@ func (ugc *UserGameLocationUsecase) DisconnectUserGameLocation(userGameLocation 
 }
 
 func (ugc *UserGameLocationUsecase) SendGameJoinedEvent(userGameLocation *model.UserGameLocation) error {
+	userGameLocation.Status = "JOINED"
+	err := ugc.ConnectUserGameLocation(userGameLocation)
+	if err != nil {
+		return fmt.Errorf("error connecting client to game: %v", err)
+	}
 	connectedUserGameLocations := ugc.inMemoryUserGameLocationRepo.GetAllUserGameLocationsByRoomId(userGameLocation.RoomID)
 	connectedUserIds := []uint{}
 	for _, otherUserGameLocation := range connectedUserGameLocations {
@@ -84,7 +89,12 @@ func (ugc *UserGameLocationUsecase) SendGameJoinedEvent(userGameLocation *model.
 		"userGameLocations": userLocations,
 	}
 	msg := model.NewMessage(roomJoinedMsg)
-	return ugc.SendMessageToSameRoom(userGameLocation, msg)
+	err = ugc.SendMessageToSameRoom(userGameLocation, msg)
+	if err != nil {
+		return fmt.Errorf("failed to send message to same room: %w", err)
+	}
+
+	return nil
 }
 
 func (ugc *UserGameLocationUsecase) SendAudioJoinedEvent(userGameLocation *model.UserGameLocation) error {
